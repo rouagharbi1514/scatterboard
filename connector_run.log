@@ -1,0 +1,19 @@
+2025-06-05 12:22:44,034 - connector-runner - INFO - Starting data extraction run
+2025-06-05 12:22:44,035 - connector-runner - INFO - Pulling availability data for 30 days
+2025-06-05 12:22:44,035 - connector-runner - ERROR - Error during data extraction: No data source configured. Set SOURCE_TYPE environment variable.
+Traceback (most recent call last):
+  File "/Users/hamzamathlouthi/Desktop/scatterboard02/hotel-dashboard/connectors/runner.py", line 76, in run_data_extraction
+    availability_data = pull_availability(from_date=now, days=days)
+  File "/Users/hamzamathlouthi/Desktop/scatterboard02/hotel-dashboard/connectors/__init__.py", line 29, in pull_availability
+    raise NotImplementedError(
+NotImplementedError: No data source configured. Set SOURCE_TYPE environment variable.
+2025-06-05 12:29:22,731 - connector-runner - INFO - Loading environment from /Users/hamzamathlouthi/Desktop/scatterboard02/hotel-dashboard/.env
+2025-06-05 12:29:22,733 - connector-runner - INFO - Starting data extraction run
+2025-06-05 12:29:22,733 - connector-runner - INFO - Pulling availability data for 30 days
+2025-06-05 12:29:22,734 - connector-runner - ERROR - Error during data extraction: name 'read_data_files' is not defined
+Traceback (most recent call last):
+  File "/Users/hamzamathlouthi/Desktop/scatterboard02/hotel-dashboard/connectors/runner.py", line 76, in run_data_extraction
+    availability_data = pull_availability(from_date=now, days=days)
+  File "/Users/hamzamathlouthi/Desktop/scatterboard02/hotel-dashboard/connectors/__init__.py", line 22, in pull_availability
+    return read_data_files("availability_*.*")  # Note the *.* pattern to match all extensions
+NameError: name 'read_data_files' is not defined
