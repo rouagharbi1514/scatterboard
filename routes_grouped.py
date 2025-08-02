@@ -17,6 +17,7 @@ from views import (
     operations_efficiency_display,
     operations_custom_charts_display,
     housekeeping_display,
+    ForecastScatterView,
 )
 from views.what_if import display as what_if_display
 from views.what_if_turbo_simple import display as what_if_turbo_display
@@ -62,5 +63,8 @@ ROUTES_GROUPED = {
     "What If": {
         "What If Analysis": what_if_display,
         "What-If Turbo": what_if_turbo_display,
+    },
+    "Forecasting": {
+        "Forecast Scatter": ForecastScatterView,
     },
 }

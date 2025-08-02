@@ -131,6 +131,8 @@ try:
 except ImportError:
     upselling = None
 
+from .forecast_scatter import ForecastScatterView
+
 # Create a placeholder module class
 class PlaceholderModule:
     """Placeholder for modules that aren't implemented yet."""

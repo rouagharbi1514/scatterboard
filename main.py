@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         self._show_welcome()
 
         # global stylesheet
-        self._apply_stylesheet()
+        # self._apply_stylesheet()
 
         # Start timer to update the time
         self.timer = QTimer(self)
