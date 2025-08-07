@@ -31,9 +31,10 @@ class TimeSeriesDataset(Dataset):
         return len(self.y) - self.seq_len
 
     def __getitem__(self, idx):
-        seq_x = self.X[idx:idx+self.seq_len]
-        seq_y = self.y[idx+self.seq_len]
-        return torch.from_numpy(seq_x), torch.tensor(seq_y, dtype=torch.float32)
+        seq_x = self.X[idx:idx + self.seq_len]
+        seq_y = self.y[idx + self.seq_len]
+        # Avoid torch.from_numpy to circumvent environments lacking NumPy bindings in Torch
+        return torch.tensor(seq_x, dtype=torch.float32), torch.tensor(seq_y, dtype=torch.float32)
 
 
 class LSTMModel(nn.Module):
@@ -123,7 +124,8 @@ def evaluate_model(model, dataset, scaler_y, sequence_length):
 
 def forecast_future(model, X_scaled, df_dates, scaler_X, scaler_y, sequence_length, forecast_horizon=30):
     future_preds = []
-    current_seq = torch.from_numpy(X_scaled[-sequence_length:]).unsqueeze(0)
+    # Use torch.tensor instead of torch.from_numpy to remove the hard NumPy dependency inside torch
+    current_seq = torch.tensor(X_scaled[-sequence_length:], dtype=torch.float32).unsqueeze(0)
 
     model.eval()
     future_dates = df_dates.copy()
@@ -144,7 +146,8 @@ def forecast_future(model, X_scaled, df_dates, scaler_X, scaler_y, sequence_leng
             next_features = np.array([[day, month, dayofweek, dayofyear]], dtype=np.float32)
             next_features_scaled = scaler_X.transform(next_features)
 
-            current_seq = torch.cat((current_seq[:, 1:, :], torch.from_numpy(next_features_scaled).unsqueeze(0)), dim=1)
+            next_tensor = torch.tensor(next_features_scaled, dtype=torch.float32).unsqueeze(0)
+            current_seq = torch.cat((current_seq[:, 1:, :], next_tensor), dim=1)
 
     future_preds = scaler_y.inverse_transform(np.array(future_preds).reshape(-1, 1)).flatten()
     forecast_dates = pd.date_range(start=df_dates.max() + pd.Timedelta(days=1), periods=forecast_horizon)

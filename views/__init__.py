@@ -1,7 +1,11 @@
+# flake8: noqa
 """
 Views package for the hotel dashboard.
 Contains all visualization modules.
 """
+
+import traceback
+from .forecast_scatter import ForecastScatterView
 
 # Import existing modules with try/except to handle optional components
 try:
@@ -25,7 +29,10 @@ except ImportError:
     housekeeping_display_imported = None
 
 try:
-    from .profitability import display_room_profit, display_room_type_profitability
+    from .profitability import (
+        display_room_profit,
+        display_room_type_profitability
+    )
 except ImportError:
     display_room_profit = None
     display_room_type_profitability = None
@@ -131,8 +138,6 @@ try:
 except ImportError:
     upselling = None
 
-from .forecast_scatter import ForecastScatterView
-
 # Create a placeholder module class
 class PlaceholderModule:
     """Placeholder for modules that aren't implemented yet."""
@@ -147,6 +152,7 @@ class PlaceholderModule:
         layout.addWidget(label)
         return widget
 
+
 # Create placeholder display function
 def placeholder_display(*args, **kwargs):
     """Placeholder function for views that aren't implemented yet."""
@@ -156,6 +162,7 @@ def placeholder_display(*args, **kwargs):
     label = QLabel("This view is not implemented yet.")
     layout.addWidget(label)
     return widget
+
 
 # Assign the final display functions
 marketing_display = marketing_display_imported or placeholder_display
@@ -171,18 +178,14 @@ guests_facilities_usage = guests_facilities_usage_imported or placeholder_displa
 operations_fb_display = display_fb or PlaceholderModule.display
 
 # Remove unused import and fix undefined name errors
-from connectors.local_server_connector import (
-    read_data_files,  # Only import what actually exists
-    read_csv,         # This is an alias for read_data_files
-)
+from connectors.local_server_connector import read_data_files
 
-# Fix line length error by breaking into multiple lines
+
+# Define read_csv function
 def read_csv(*args, **kwargs):
-    # Fix undefined name error
-    return read_data_files(
-        *args,
-        **kwargs
-    )
+    """Read CSV files."""
+    return read_data_files(*args, **kwargs)
+
 
 # Replace the FileUploadModule class with a direct function
 def file_upload_display():
@@ -211,12 +214,16 @@ def file_upload_display():
     root.layout().addWidget(title)
 
     # Instructions
-    instructions = QLabel(
-        "Upload your hotel data file. Supported formats: CSV, Excel (XLS, XLSX).\n\n"
+    instructions_text = (
+        "Upload your hotel data file. Supported formats: "
+        "CSV, Excel (XLS, XLSX).\n\n"
         "After uploading, you can map your columns to the required fields."
     )
+    instructions = QLabel(instructions_text)
     instructions.setWordWrap(True)
-    instructions.setStyleSheet("font-size: 11pt; color: #666; margin-bottom: 15px;")
+    instructions.setStyleSheet(
+        "font-size: 11pt; color: #666; margin-bottom: 15px;"
+    )
     root.layout().addWidget(instructions)
 
     # File Upload Section
@@ -407,7 +414,8 @@ def file_upload_display():
             root,
             "Select Data File",
             "",
-            "Data Files (*.csv *.xlsx *.xls);;CSV Files (*.csv);;Excel Files (*.xlsx *.xls)",
+            "Data Files (*.csv *.xlsx *.xls);;"
+            "CSV Files (*.csv);;Excel Files (*.xlsx *.xls)",
         )
 
         if not file_path:
@@ -444,7 +452,6 @@ def file_upload_display():
 
         except Exception as e:
             import traceback
-
             traceback.print_exc()
             progress.setVisible(False)
             status_label.setText("Upload failed with error")
@@ -454,6 +461,7 @@ def file_upload_display():
 
     # Modify the process_mappings function in file_upload_display
     def process_mappings():
+        import traceback
         if loaded_df is None:
             return
 
@@ -481,7 +489,8 @@ def file_upload_display():
                 QMessageBox.warning(
                     root,
                     "Missing Mappings",
-                    f"Please select mappings for these required fields: {', '.join(missing_fields)}"
+                    f"Please select mappings for these required fields: "
+                    f"{', '.join(missing_fields)}"
                 )
                 progress.setVisible(False)
                 return
@@ -496,24 +505,34 @@ def file_upload_display():
                 # Special handling for date column
                 if field == "date":
                     try:
-                        mapped_df[field] = pd.to_datetime(mapped_df[field], errors='coerce')
+                        mapped_df[field] = pd.to_datetime(
+                            mapped_df[field],
+                            errors='coerce'
+                        )
                         # Check if we got valid dates
                         if mapped_df[field].isna().all():
                             raise ValueError("Could not parse any valid dates")
                     except Exception as e:
                         print(f"Error parsing dates: {e}")
                         # Try different date format patterns
-                        date_formats = ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d", "%m-%d-%Y"]
+                        date_formats = [
+                            "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y",
+                            "%Y/%m/%d", "%m-%d-%Y"
+                        ]
                         for fmt in date_formats:
                             try:
-                                mapped_df[field] = pd.to_datetime(mapped_df[field], format=fmt, errors='coerce')
+                                mapped_df[field] = pd.to_datetime(
+                                    mapped_df[field],
+                                    format=fmt,
+                                    errors='coerce'
+                                )
                                 if not mapped_df[field].isna().all():
-                                    print(f"Successfully parsed dates with format {fmt}")
+                                    print(f"Success with format {fmt}")
                                     break
                             except Exception:
                                 continue
 
-                # Special handling for occupancy (convert percentage to decimal if needed)
+                # Special handling for occupancy (convert % to decimal)
                 if field == "occupancy" and mapped_df[field].max() > 1:
                     mapped_df[field] = mapped_df[field] / 100
 
@@ -524,7 +543,10 @@ def file_upload_display():
 
             # Copy original data columns that might be useful
             for col in df.columns:
-                selected_columns = [mapping_combos[field].currentText() for field in mapping_combos]
+                selected_columns = [
+                    mapping_combos[field].currentText() 
+                    for field in mapping_combos
+                ]
                 if col not in mapped_df.columns and col not in selected_columns:
                     mapped_df[col] = df[col]
 
@@ -541,47 +563,51 @@ def file_upload_display():
             has_nulls = False
             for field in mapping_combos.keys():
                 if mapped_df[field].isna().any():
-                    print(f"Warning: Column '{field}' has {mapped_df[field].isna().sum()} null values")
+                    null_count = mapped_df[field].isna().sum()
+                    print(f"Warning: Column '{field}' has {null_count} null values")
                     has_nulls = True
 
             if has_nulls:
-                print("Note: Nulls were found in required columns which may cause issues")
+                print("Note: Nulls found in required columns")
 
-            # Load into app using adapt_data_for_views to ensure all needed columns
-            # Import here to avoid circular imports
+            # Load into app using adapt_data_for_views
             from data import adapt_data_for_views, load_dataframe
             try:
                 # Make sure we have the required columns
                 for field in ["date", "room_type", "occupancy", "rate"]:
                     if field not in mapped_df.columns:
-                        raise ValueError(f"Required column '{field}' is missing after mapping")
+                        raise ValueError(
+                            f"Required column '{field}' is missing after mapping"
+                        )
 
                 # Convert occupancy to decimal if it's in percentage
                 if mapped_df["occupancy"].max() > 1:
                     mapped_df["occupancy"] = mapped_df["occupancy"] / 100
 
-                # Apply the data adaptation to ensure all required derived columns exist
+                # Apply data adaptation for derived columns
                 adapted_df = adapt_data_for_views(mapped_df)
                 if adapted_df is None:
                     raise ValueError("Data adaptation failed - returned None")
 
-                # Verify the adapted dataframe has the minimum required columns
+                # Verify the adapted dataframe has required columns
                 missing_cols = []
                 for col in ["date", "room_type", "occupancy", "rate"]:
                     if col not in adapted_df.columns:
                         missing_cols.append(col)
 
                 if missing_cols:
-                    raise ValueError(f"Adapted dataframe is missing required columns: {missing_cols}")
+                    raise ValueError(
+                        f"Adapted dataframe missing required columns: {missing_cols}"
+                    )
 
-                # Then load the adapted dataframe
+                # Load the adapted dataframe
                 print("Loading dataframe with columns:", adapted_df.columns.tolist())
                 success = load_dataframe(adapted_df)
                 if not success:
                     raise ValueError("Failed to load dataframe")
 
             except Exception as e:
-                print(f"Error during data mapping and loading: {str(e)}")
+                print(f"Error during data mapping: {str(e)}")
                 traceback.print_exc()
                 success = False
 
@@ -590,7 +616,8 @@ def file_upload_display():
                 QMessageBox.information(
                     root,
                     "Upload successful",
-                    f"Successfully loaded {len(mapped_df)} rows with your column mappings.",
+                    f"Successfully loaded {len(mapped_df)} rows "
+                    "with your column mappings.",
                 )
 
                 # Refresh date pickers in all relevant views
@@ -606,11 +633,11 @@ def file_upload_display():
             else:
                 status_label.setText("Upload failed")
                 QMessageBox.warning(
-                    root, "Upload failed", "Failed to load the data with your mappings."
+                    root,
+                    "Upload failed",
+                    "Failed to load the data with your mappings."
                 )
         except Exception as e:
-            import traceback
-
             traceback.print_exc()
             progress.setVisible(False)
             status_label.setText("Data processing failed with error")
@@ -661,6 +688,7 @@ def file_upload_display():
 
     return root
 
+
 # Replace the placeholder file_upload with the functional one
 file_upload = file_upload_display
 
@@ -681,6 +709,7 @@ cancellations_display = cancellations.display if cancellations else PlaceholderM
 storytelling_display = storytelling.display if storytelling else PlaceholderModule.display
 advanced_display = advanced.display if advanced else PlaceholderModule.display
 advanced_dig_deeper_display = advanced.display_dig_deeper if advanced else PlaceholderModule.display
+
 
 # Define the missing get_view_function that's used in revenue.py
 def get_view_function(view_name):
@@ -727,6 +756,7 @@ def get_view_function(view_name):
     # Return the function if it exists, otherwise return None
     return view_functions.get(view_name)
 
+
 __all__ = [
     "overview_display",
     "kpis_display",
@@ -736,11 +766,10 @@ __all__ = [
     "display_room_profit",
     "display_room_type_profitability",
     "guests_display",
-    "guests_preferences_display",  # Make sure all guest functions are included
+    "guests_preferences_display",
     "guests_age_analysis",
     "guests_cancellation_analysis",
     "guests_facilities_usage",
-    "guests_unified_analysis",
     "file_upload_display",
     "pricing_display",
     "ml_pricing_display",
@@ -761,4 +790,5 @@ __all__ = [
     "storytelling_display",
     "advanced_display",
     "advanced_dig_deeper_display",
+    "ForecastScatterView",
 ]

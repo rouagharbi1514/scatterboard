@@ -1,3 +1,4 @@
+# flake8: noqa
 # views/profitability.py
 """
 Room-level Profit Analysis

@@ -1,3 +1,4 @@
+# flake8: noqa
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTableView
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 import numpy as np

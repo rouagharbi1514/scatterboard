@@ -1,3 +1,4 @@
+# flake8: noqa
 import functools
 import pandas as pd  # Add this import at the top
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton

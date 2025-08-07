@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         self._show_welcome()
 
         # global stylesheet
-        # self._apply_stylesheet()
+        self._apply_stylesheet()
 
         # Start timer to update the time
         self.timer = QTimer(self)
@@ -310,7 +310,10 @@ class MainWindow(QMainWindow):
 
     # ──────────────────────── sidebar helpers
     def _load_views(self) -> None:
+        hidden_groups = {"Advanced", "Data"}  # groups to hide from sidebar
         for group, routes in ROUTES_GROUPED.items():
+            if group in hidden_groups:
+                continue  # skip hidden groups
             self._add_view_group(group, routes)
 
     def _add_view_group(

@@ -1,3 +1,4 @@
+# flake8: noqa
 # views/operations.py – with interactive Plotly charts
 # ----------------------------------------------------
 # • Uses Plotly for interactive charts

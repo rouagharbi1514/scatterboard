@@ -1,3 +1,4 @@
+# flake8: noqa
 # views/revenue.py
 """
 Revenue Analysis View

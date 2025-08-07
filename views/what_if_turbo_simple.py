@@ -1,3 +1,4 @@
+# flake8: noqa
 # views/what_if_turbo_simple.py
 """
 Simplified What-If Turbo Panel

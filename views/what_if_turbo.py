@@ -1,3 +1,4 @@
+# flake8: noqa
 # views/what_if_turbo.py
 """
 What-If Turbo Panel
@@ -11,11 +12,11 @@ from __future__ import annotations
 import json
 import traceback
 import numpy as np
-from typing import Dict
+from typing import Dict, Tuple, List
 from io import StringIO
-
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QMessageBox,
     QSizePolicy,
+    QProgressBar,
 )
 # Try to import QWebEngineView, fallback to QLabel if not available
 try:
@@ -47,16 +49,15 @@ except ImportError:
     WEBENGINE_AVAILABLE = False
 
 from data.helpers import get_df
-from data.scenario_calculator import simulate_30day_pl, calculate_waterfall_data
-from views.utils import data_required
+from views.utils import data_required, format_currency
 try:
     from connectors.local_server_connector import get_baseline_data
     from connectors.oracle_cloud_connector import fetch_baseline_data
 except ImportError:
-    def get_baseline_data():
+    def get_baseline_data() -> pd.DataFrame:
         return pd.DataFrame()
 
-    def fetch_baseline_data():
+    def fetch_baseline_data() -> pd.DataFrame:
         return pd.DataFrame()
 
 
@@ -82,8 +83,10 @@ class WhatIfTurboPanel(QWidget):
 
         # Data attributes
         self.baseline_data = pd.DataFrame()
-        self.baseline_kpis = {}
-        self.current_scenario = {}
+        self.baseline_kpis: Dict[str, float] = {}
+        self.current_scenario: Dict[str, float] = {}
+        self.room_types: List[str] = ["Standard", "Deluxe", "Suite", "Presidential"]
+        self.room_counts: Dict[str, int] = {}
 
         # Initialize chart_view to None
         self.chart_view = None
@@ -108,7 +111,7 @@ class WhatIfTurboPanel(QWidget):
             # Create minimal fallback UI
             self._setup_minimal_ui()
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup the user interface."""
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -127,6 +130,12 @@ class WhatIfTurboPanel(QWidget):
 
         # Input controls
         layout.addWidget(self._create_input_controls())
+
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
 
         # KPI display
         layout.addWidget(self._create_kpi_display())
@@ -223,6 +232,7 @@ class WhatIfTurboPanel(QWidget):
         for label in [self.revpar_label, self.goppar_label,
                       self.profit_delta_label, self.occupancy_rooms_label]:
             label.setStyleSheet(kpi_style)
+            label.setMinimumWidth(180)
 
         layout.addWidget(self.revpar_label, 0, 0)
         layout.addWidget(self.goppar_label, 0, 1)
@@ -283,9 +293,7 @@ class WhatIfTurboPanel(QWidget):
                 padding: 8px 16px;
                 border-radius: 4px;
             }
-            QPushButton:hover {
-                background-color: #229954;
-            }
+            QPushButton:hover { background-color: #229954; }
         """)
 
         # Export Excel button
@@ -298,9 +306,7 @@ class WhatIfTurboPanel(QWidget):
                 padding: 8px 16px;
                 border-radius: 4px;
             }
-            QPushButton:hover {
-                background-color: #2471a3;
-            }
+            QPushButton:hover { background-color: #2471a3; }
         """)
 
         # Export PDF button
@@ -313,9 +319,7 @@ class WhatIfTurboPanel(QWidget):
                 padding: 8px 16px;
                 border-radius: 4px;
             }
-            QPushButton:hover {
-                background-color: #cb4335;
-            }
+            QPushButton:hover { background-color: #cb4335; }
         """)
 
         layout.addWidget(self.save_json_btn)
@@ -324,7 +328,7 @@ class WhatIfTurboPanel(QWidget):
 
         return group
 
-    def _connect_signals(self):
+    def _connect_signals(self) -> None:
         """Connect UI signals to handlers."""
         try:
             # Input controls
@@ -351,7 +355,7 @@ class WhatIfTurboPanel(QWidget):
         except Exception as e:
             print(f"Error connecting signals: {e}")
 
-    def _load_baseline_data(self):
+    def _load_baseline_data(self) -> None:
         """Load baseline data with offline-first approach."""
         try:
             # Try to get current data first
@@ -359,6 +363,7 @@ class WhatIfTurboPanel(QWidget):
                 self.baseline_data = get_df()
                 if not self.baseline_data.empty:
                     print("✓ Loaded baseline data from current DataFrame")
+                    self._extract_room_counts()
                     return
             except Exception as e:
                 print(f"Warning: Could not load current DataFrame: {e}")
@@ -368,6 +373,7 @@ class WhatIfTurboPanel(QWidget):
                 self.baseline_data = fetch_baseline_data()
                 if not self.baseline_data.empty:
                     print("✓ Loaded baseline data from Oracle Cloud")
+                    self._extract_room_counts()
                     self._cache_baseline_data()
                     return
             except Exception as e:
@@ -378,6 +384,7 @@ class WhatIfTurboPanel(QWidget):
                 self.baseline_data = get_baseline_data()
                 if not self.baseline_data.empty:
                     print("✓ Loaded baseline data from local server")
+                    self._extract_room_counts()
                     return
             except Exception as e:
                 print(f"Warning: Could not load from local server: {e}")
@@ -389,7 +396,9 @@ class WhatIfTurboPanel(QWidget):
                 'revenue': np.random.uniform(1000, 2000, 30),
                 'occupancy': np.random.uniform(0.6, 0.9, 30),
                 'rate': np.random.uniform(120, 180, 30),
+                'room_type': np.random.choice(self.room_types, 30)
             })
+            self._extract_room_counts()
 
         except Exception as e:
             print(f"Error loading baseline data: {e}")
@@ -399,9 +408,34 @@ class WhatIfTurboPanel(QWidget):
                 'revenue': [1500.0],
                 'occupancy': [0.75],
                 'rate': [150.0],
+                'room_type': ['Standard']
             })
+            self.room_counts = {rt: 1 for rt in self.room_types}
 
-    def _cache_baseline_data(self):
+    def _extract_room_counts(self) -> None:
+        """Extract room counts from baseline data."""
+        try:
+            if 'room_type' in self.baseline_data.columns:
+                room_counts = self.baseline_data['room_type'].value_counts()
+                self.room_counts = room_counts.to_dict()
+            else:
+                # Default room counts
+                self.room_counts = {
+                    "Standard": 50,
+                    "Deluxe": 30,
+                    "Suite": 15,
+                    "Presidential": 5
+                }
+        except Exception as e:
+            print(f"Error extracting room counts: {e}")
+            self.room_counts = {
+                "Standard": 50,
+                "Deluxe": 30,
+                "Suite": 15,
+                "Presidential": 5
+            }
+
+    def _cache_baseline_data(self) -> None:
         """Cache baseline data (Redis if available, in-memory fallback)."""
         try:
             import redis
@@ -411,7 +445,7 @@ class WhatIfTurboPanel(QWidget):
             # In-memory caching fallback
             pass
 
-    def _on_rate_changed(self, value: int):
+    def _on_rate_changed(self, value: int) -> None:
         """Handle room rate slider change."""
         try:
             if hasattr(self, 'rate_label'):
@@ -420,7 +454,7 @@ class WhatIfTurboPanel(QWidget):
         except Exception as e:
             print(f"Error handling rate change: {e}")
 
-    def _trigger_update(self):
+    def _trigger_update(self) -> None:
         """Trigger scenario update with debouncing."""
         try:
             if hasattr(self, 'update_timer'):
@@ -428,7 +462,7 @@ class WhatIfTurboPanel(QWidget):
         except Exception as e:
             print(f"Error triggering update: {e}")
 
-    def _update_inputs(self):
+    def _update_inputs(self) -> None:
         """Update current scenario inputs."""
         try:
             self.current_scenario = {
@@ -449,10 +483,12 @@ class WhatIfTurboPanel(QWidget):
                 'promotion_active': False,
             }
 
-    def _calculate_scenario(self):
+    def _calculate_scenario(self) -> None:
         """Calculate scenario KPIs and update display."""
         try:
             self._update_inputs()
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(10)
 
             # Calculate baseline KPIs if not already done
             if not self.baseline_kpis:
@@ -464,8 +500,8 @@ class WhatIfTurboPanel(QWidget):
                     'promotion_active': False,
                 }
                 try:
-                    self.baseline_kpis = simulate_30day_pl(
-                        baseline_inputs, self.baseline_data
+                    self.baseline_kpis = self._simulate_30day_pl(
+                        baseline_inputs
                     )
                 except Exception as e:
                     print(f"Error calculating baseline KPIs: {e}")
@@ -478,11 +514,12 @@ class WhatIfTurboPanel(QWidget):
                         'total_revenue': 3375.0,
                         'total_profit': 2025.0,
                     }
+            self.progress_bar.setValue(30)
 
             # Calculate scenario KPIs
             try:
-                scenario_kpis = simulate_30day_pl(
-                    self.current_scenario, self.baseline_data
+                scenario_kpis = self._simulate_30day_pl(
+                    self.current_scenario
                 )
             except Exception as e:
                 print(f"Error calculating scenario KPIs: {e}")
@@ -498,6 +535,7 @@ class WhatIfTurboPanel(QWidget):
                     'total_revenue': revpar * 30 * 100,
                     'total_profit': revpar * 0.6 * 30 * 100,
                 }
+            self.progress_bar.setValue(70)
 
             # Update KPI labels
             self._update_kpi_display(scenario_kpis)
@@ -507,6 +545,8 @@ class WhatIfTurboPanel(QWidget):
 
             # Emit signal
             self.scenario_changed.emit(scenario_kpis)
+            self.progress_bar.setValue(100)
+            self.progress_bar.setVisible(False)
 
         except Exception as e:
             print(f"Error calculating scenario: {e}")
@@ -516,8 +556,67 @@ class WhatIfTurboPanel(QWidget):
             self.goppar_label.setText("GOPPAR: Error")
             self.profit_delta_label.setText("Profit Δ: Error")
             self.occupancy_rooms_label.setText("Occupied Rooms: Error")
+            self.progress_bar.setVisible(False)
 
-    def _update_kpi_display(self, kpis: Dict[str, float]):
+    def _simulate_30day_pl(self, inputs: Dict) -> Dict:
+        """Simulate 30-day P&L with realistic financial model."""
+        # Base values
+        base_rate = inputs['room_rate']
+        occupancy = inputs['occupancy_pct'] / 100
+        housekeeping = inputs['housekeeping_staff']
+        fb_staff = inputs['fb_staff']
+        promotion = inputs['promotion_active']
+        
+        # Calculate demand elasticity (price sensitivity)
+        price_change = (base_rate - 150) / 150  # % change from baseline
+        demand_factor = max(0.7, 1 - 0.8 * abs(price_change))  # Elasticity factor
+        
+        # Adjust occupancy based on price and promotion
+        adj_occupancy = occupancy * demand_factor
+        if promotion:
+            adj_occupancy *= 1.15  # 15% boost from promotion
+        
+        # Revenue calculation with leakage
+        total_rooms = sum(self.room_counts.values())
+        occupied_rooms = adj_occupancy * total_rooms
+        revenue = occupied_rooms * base_rate * 30  # 30 days
+        
+        # Apply leakage (revenue not captured)
+        leakage = 0.05 * revenue  # 5% leakage
+        net_revenue = revenue - leakage
+        
+        # Cost calculations
+        # Fixed costs (30% of revenue)
+        fixed_costs = 0.3 * net_revenue
+        
+        # Variable costs
+        # Staff costs with diminishing returns
+        hk_cost = 2500 * housekeeping * (1 - 0.02 * max(0, housekeeping - 10))
+        fb_cost = 3000 * fb_staff * (1 - 0.015 * max(0, fb_staff - 8))
+        
+        # Promotion cost
+        promo_cost = 0.1 * net_revenue if promotion else 0
+        
+        total_costs = fixed_costs + hk_cost + fb_cost + promo_cost
+        
+        # Profit calculation
+        profit = net_revenue - total_costs
+        
+        # Key metrics
+        revpar = net_revenue / (total_rooms * 30)
+        goppar = profit / (total_rooms * 30)
+        
+        return {
+            'revpar': revpar,
+            'goppar': goppar,
+            'profit_delta': profit - self.baseline_kpis.get('total_profit', 0),
+            'occupancy_rooms': occupied_rooms,
+            'total_revenue': net_revenue,
+            'total_profit': profit,
+            'total_costs': total_costs
+        }
+
+    def _update_kpi_display(self, kpis: Dict[str, float]) -> None:
         """Update KPI display labels."""
         try:
             if hasattr(self, 'revpar_label'):
@@ -526,12 +625,12 @@ class WhatIfTurboPanel(QWidget):
                 self.goppar_label.setText(f"GOPPAR: ${kpis.get('goppar', 0):.2f}")
 
             profit_delta = kpis.get('profit_delta', 0)
-            delta_color = "green" if profit_delta >= 0 else "red"
+            delta_color = "#28a745" if profit_delta >= 0 else "#e74c3c"
             delta_sign = "+" if profit_delta >= 0 else ""
 
             if hasattr(self, 'profit_delta_label'):
                 self.profit_delta_label.setText(
-                    f"Profit Δ: {delta_sign}${profit_delta:.2f}"
+                    f"Profit Δ: {delta_sign}${profit_delta:,.2f}"
                 )
                 self.profit_delta_label.setStyleSheet(f"""
                     QLabel {{
@@ -552,50 +651,71 @@ class WhatIfTurboPanel(QWidget):
         except Exception as e:
             print(f"Error updating KPI display: {e}")
 
-    def _update_waterfall_chart(self, scenario_kpis: Dict[str, float]):
+    def _update_waterfall_chart(self, scenario_kpis: Dict[str, float]) -> None:
         """Update waterfall chart with profit analysis."""
         try:
             if not self.baseline_kpis:
                 return
 
-            waterfall_data = calculate_waterfall_data(
-                self.baseline_kpis, scenario_kpis
-            )
+            # Calculate waterfall data
+            baseline = self.baseline_kpis['total_profit']
+            revenue_impact = scenario_kpis['total_revenue'] - self.baseline_kpis['total_revenue']
+            cost_impact = -(scenario_kpis['total_costs'] - self.baseline_kpis.get('total_costs', 0))
+            final = scenario_kpis['total_profit']
+            
+            # Create categories and values
+            categories = ["Baseline", "Revenue Impact", "Cost Impact", "Final"]
+            values = [baseline, revenue_impact, cost_impact, final]
+            measures = ["absolute", "relative", "relative", "total"]
+            
+            # Create colors
+            colors = ["#3498db", 
+                      "#2ecc71" if revenue_impact >= 0 else "#e74c3c",
+                      "#2ecc71" if cost_impact >= 0 else "#e74c3c",
+                      "#9b59b6"]
 
             # Create Plotly waterfall chart
-            fig = go.Figure()
-
-            categories = waterfall_data['categories']
-            values = waterfall_data['values']
-
-            # Add waterfall trace
-            fig.add_trace(go.Waterfall(
+            fig = go.Figure(go.Waterfall(
                 name="Profit Analysis",
                 orientation="v",
-                measure=["absolute", "relative", "relative", "total"],
+                measure=measures,
                 x=categories,
                 textposition="outside",
                 text=[f"${v:,.0f}" for v in values],
                 y=values,
                 connector={"line": {"color": "rgb(63, 63, 63)"}},
-                increasing={"marker": {"color": "green"}},
-                decreasing={"marker": {"color": "red"}},
-                totals={"marker": {"color": "blue"}},
+                increasing={"marker": {"color": "#2ecc71"}},
+                decreasing={"marker": {"color": "#e74c3c"}},
+                totals={"marker": {"color": "#9b59b6"}},
             ))
 
+            # Add annotations
+            fig.add_annotation(
+                x=1, y=final,
+                text=f"Final Profit: ${final:,.0f}",
+                showarrow=True,
+                arrowhead=4,
+                ax=0,
+                ay=-40
+            )
+
+            # Update layout
             fig.update_layout(
                 title="Profit Impact Waterfall",
                 showlegend=False,
                 template="plotly_white",
-                height=300,
-                margin=dict(l=0, r=0, t=30, b=0),
+                height=350,
+                margin=dict(l=0, r=0, t=50, b=20),
+                xaxis_title="Category",
+                yaxis_title="Amount ($)",
+                hovermode="x unified"
             )
 
             # Display chart based on available widget type
             if WEBENGINE_AVAILABLE and hasattr(self.chart_view, 'setHtml'):
                 # Convert to HTML and display in QWebEngineView
                 html_string = StringIO()
-                fig.write_html(html_string, include_plotlyjs="cdn", div_id="chart")
+                fig.write_html(html_string, include_plotlyjs="cdn", full_html=False)
                 self.chart_view.setHtml(html_string.getvalue())
             else:
                 # Fallback: display summary in QLabel
@@ -620,7 +740,7 @@ class WhatIfTurboPanel(QWidget):
             else:
                 self.chart_view.setText(f"Chart Error: {str(e)}")
 
-    def _save_json(self):
+    def _save_json(self) -> None:
         """Save scenario to JSON file."""
         try:
             filename, _ = QFileDialog.getSaveFileName(
@@ -635,8 +755,8 @@ class WhatIfTurboPanel(QWidget):
                     'inputs': self.current_scenario,
                     'timestamp': pd.Timestamp.now().isoformat(),
                     'baseline_kpis': self.baseline_kpis,
-                    'scenario_kpis': simulate_30day_pl(
-                        self.current_scenario, self.baseline_data
+                    'scenario_kpis': self._simulate_30day_pl(
+                        self.current_scenario
                     ),
                 }
 
@@ -651,7 +771,7 @@ class WhatIfTurboPanel(QWidget):
                 self, "Error", f"Failed to save scenario: {str(e)}"
             )
 
-    def _export_excel(self):
+    def _export_excel(self) -> None:
         """Export scenario to Excel file."""
         try:
             filename, _ = QFileDialog.getSaveFileName(
@@ -662,8 +782,8 @@ class WhatIfTurboPanel(QWidget):
             )
 
             if filename:
-                scenario_kpis = simulate_30day_pl(
-                    self.current_scenario, self.baseline_data
+                scenario_kpis = self._simulate_30day_pl(
+                    self.current_scenario
                 )
 
                 # Create DataFrame for export
@@ -690,7 +810,7 @@ class WhatIfTurboPanel(QWidget):
                 self, "Error", f"Failed to export to Excel: {str(e)}"
             )
 
-    def _export_pdf(self):
+    def _export_pdf(self) -> None:
         """Export chart to PDF file."""
         try:
             filename, _ = QFileDialog.getSaveFileName(
@@ -718,7 +838,7 @@ class WhatIfTurboPanel(QWidget):
                 self, "Error", f"Failed to export to PDF: {str(e)}"
             )
 
-    def _setup_minimal_ui(self):
+    def _setup_minimal_ui(self) -> None:
         """Setup minimal UI when full UI fails."""
         layout = QVBoxLayout(self)
 

@@ -15,18 +15,21 @@ logging.basicConfig(level=logging.INFO,
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Global variable to store data
+# Global variables to store data
 _data_frame = None
+_df = None  # unified exposed copy for views
 _data_loaded = False
 
 
 def load_file(file_path: str) -> bool:
     """Load data from various file formats (csv, xlsx, xls)."""
-    global _data_frame, _data_loaded
+    global _data_frame, _data_loaded, _df
 
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
+    # Reset exposed copy
+    _df = None
     try:
         if ext == ".csv":
             _data_frame = pd.read_csv(file_path)
@@ -74,6 +77,7 @@ def load_dataframe(df: pd.DataFrame) -> bool:
         
     try:
         _data_frame = df.copy()
+        _df = None  # invalidate cached exposed copy
         _data_loaded = True
         print(f"Dataframe loaded successfully! {len(df)} rows with {df.columns.tolist()} columns.")
         return True

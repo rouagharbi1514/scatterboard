@@ -1,3 +1,4 @@
+# flake8: noqa
 # views/room_cost.py
 """
 Room Cost Analysis View

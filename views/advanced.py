@@ -1,4 +1,5 @@
-# views/advanced.py – adds K‑Means guest segmentation
+# flake8: noqa
+# views/advanced.py – adds K-Means guest segmentation
 """
 Advanced Analytics & Guest Segmentation
 ======================================

@@ -1,4 +1,18 @@
 # views/what_if.py
+"""
+What-If Analysis View
+=====================
+
+Interactive scenario analysis tool for hotel revenue management with
+real-time financial impact visualization.
+"""
+
+from __future__ import annotations
+from typing import Dict, List, Tuple
+import numpy as np
+from datetime import date, timedelta
+import plotly.graph_objects as go
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QSpinBox,
     QCheckBox, QGroupBox, QPushButton, QFrame, QSizePolicy,
@@ -7,16 +21,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QColor, QPalette
 
-import numpy as np
-from datetime import date, timedelta
-import plotly.graph_objects as go
-
 from views.utils import create_plotly_widget, data_required, format_currency
 
 # Matrix cache
-ELASTICITY_MATRIX = None
-BASELINE_DATA = None
-ROOM_TYPES = []
+ELASTICITY_MATRIX: np.ndarray = None
+BASELINE_DATA: Dict = None
+ROOM_TYPES: List[str] = []
 
 
 def _collapsible(text: str) -> QWidget:
@@ -54,12 +64,8 @@ def _collapsible(text: str) -> QWidget:
             border: none;
             text-align: left;
         }
-        QPushButton:hover {
-            background-color: #229954;
-        }
-        QPushButton:pressed {
-            background-color: #1e8449;
-        }
+        QPushButton:hover { background-color: #229954; }
+        QPushButton:pressed { background-color: #1e8449; }
     """)
 
     # Explanation label with improved styling
@@ -114,7 +120,7 @@ class WhatIfPanel(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)  # Always show for clarity
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         scroll_area.setStyleSheet("""
             QScrollArea {
                 border: 1px solid #ddd;
@@ -194,11 +200,11 @@ class WhatIfPanel(QWidget):
                 border-radius: 4px;
             }
         """)
-        controls_group.setMaximumWidth(380)  # Slightly smaller width
+        controls_group.setMaximumWidth(380)
         controls_layout = QVBoxLayout(controls_group)
         controls_layout.setSpacing(8)
 
-        # Room rate sliders - more compact
+        # Room Rate Sliders
         rate_group = QGroupBox("Room Rate Adjustments (SAR)")
         rate_group.setStyleSheet("""
             QGroupBox {
@@ -220,7 +226,7 @@ class WhatIfPanel(QWidget):
         rate_layout = QVBoxLayout(rate_group)
         rate_layout.setSpacing(6)
 
-        self.room_sliders = {}
+        self.room_sliders: Dict[str, Tuple[QSlider, QLabel]] = {}
         for room_type in ["Standard", "Deluxe", "Suite", "Presidential"]:
             slider_layout = QHBoxLayout()
             label = QLabel(f"{room_type}:")
@@ -232,7 +238,7 @@ class WhatIfPanel(QWidget):
             slider.setValue(0)
             slider.setTickPosition(QSlider.TicksBelow)
             slider.setTickInterval(10)
-            slider.setFixedWidth(200) # Slightly wider slider
+            slider.setFixedWidth(200)
             slider.setStyleSheet("""
                 QSlider::groove:horizontal {
                     border: 1px solid #c0c0c0;
@@ -346,7 +352,7 @@ class WhatIfPanel(QWidget):
         staff_layout = QVBoxLayout(staff_group)
         staff_layout.setSpacing(6)
 
-        self.staff_spinboxes = {}
+        self.staff_spinboxes: Dict[str, QSpinBox] = {}
         for dept in ["Housekeeping", "F&B"]:
             staff_row = QHBoxLayout()
             label = QLabel(f"{dept}:")
@@ -411,7 +417,7 @@ class WhatIfPanel(QWidget):
         promo_layout = QVBoxLayout(promo_group)
         promo_layout.setSpacing(4)
 
-        self.promo_checkboxes = {}
+        self.promo_checkboxes: Dict[str, QCheckBox] = {}
         for promo_id, promo_name in [
             ("spa_discount", "10% Spa Discount"),
             ("breakfast", "2-for-1 Breakfast"),
@@ -427,7 +433,7 @@ class WhatIfPanel(QWidget):
             promo_layout.addWidget(checkbox)
 
         controls_layout.addWidget(promo_group)
-        controls_layout.addStretch(1) # Push content to top
+        controls_layout.addStretch(1)
 
         top_section_layout.addWidget(controls_group)
 
@@ -459,14 +465,14 @@ class WhatIfPanel(QWidget):
         kpi_layout = QHBoxLayout()
         kpi_layout.setSpacing(10)
 
-        self.kpi_widgets = {}
+        self.kpi_widgets: Dict[str, QLabel] = {}
         kpi_metrics = ["RevPAR", "GOPPAR", "Revenue", "Cost", "Profit"]
 
         for metric in kpi_metrics:
             kpi_frame = QFrame()
             kpi_frame.setFrameShape(QFrame.StyledPanel)
             kpi_frame.setLineWidth(1)
-            kpi_frame.setFixedSize(120, 70) # More compact size
+            kpi_frame.setFixedSize(120, 70)
             kpi_frame.setStyleSheet("""
                 QFrame {
                     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
@@ -502,13 +508,13 @@ class WhatIfPanel(QWidget):
 
         # Waterfall chart placeholder - more compact
         self.waterfall_chart = QWidget()
-        self.waterfall_chart.setMinimumHeight(280) # Reduced height
+        self.waterfall_chart.setMinimumHeight(280)
         self.waterfall_chart.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         results_layout.addWidget(self.waterfall_chart)
 
         top_section_layout.addWidget(results_group)
-        top_section_layout.setStretch(0, 1) # Controls take available space
-        top_section_layout.setStretch(1, 2) # Results take more space
+        top_section_layout.setStretch(0, 1)
+        top_section_layout.setStretch(1, 2)
 
         main_layout.addLayout(top_section_layout)
 
@@ -565,43 +571,39 @@ class WhatIfPanel(QWidget):
         # Load matrix (synchronous)
         self._load_elasticity_matrix()
 
-    def _load_elasticity_matrix(self):
+    def _load_elasticity_matrix(self) -> None:
         """Load elasticity matrix with fallback to default values"""
         global ELASTICITY_MATRIX, BASELINE_DATA, ROOM_TYPES
 
         # Use default values for demonstration
         ROOM_TYPES = ["Standard", "Deluxe", "Suite", "Presidential"]
 
-        # Create a simple elasticity matrix (room_types x metrics)
-        # Metrics: occupancy impact, revenue impact, cost impact, profit impact, satisfaction
-        # Added more rows to match potential staff and promo impacts for local_calc
+        # Create a realistic elasticity matrix (room_types x metrics)
+        # Metrics: base_rate, occupancy_elasticity, revenue_impact, cost_impact
         ELASTICITY_MATRIX = np.array([
-            [0.8, 1.0, 0.5, 0.9, 0.7],  # Standard (Occupancy, Rev, Cost, Profit, Sat)
-            [0.7, 1.2, 0.6, 1.1, 0.8],  # Deluxe
-            [0.6, 1.5, 0.7, 1.3, 0.9],  # Suite
-            [0.5, 2.0, 0.8, 1.5, 1.0],  # Presidential
-            # Placeholder rows for staff impacts (e.g., impact on [Occ, Rev, Cost, Profit, Sat])
-            [0.01, 0.0, 0.05, -0.05, 0.1], # Housekeeping staff change impact
-            [0.005, 0.01, 0.03, -0.02, 0.08], # F&B staff change impact
-            # Placeholder rows for promo impacts (e.g., impact on [Occ, Rev, Cost, Profit, Sat])
-            [0.02, 0.05, 0.01, 0.04, 0.03], # Spa Discount impact
-            [0.03, 0.06, 0.02, 0.04, 0.05], # Breakfast promo impact
-            [0.015, 0.04, 0.01, 0.03, 0.02], # Resort Credit impact
-            [0.008, 0.02, 0.005, 0.01, 0.01]  # Late Checkout impact
+            [400, 0.8, 1.0, 0.5],  # Standard
+            [600, 0.7, 1.2, 0.6],  # Deluxe
+            [900, 0.6, 1.5, 0.7],  # Suite
+            [1500, 0.5, 2.0, 0.8],  # Presidential
         ])
 
-
-        # Default baseline data with more realistic hotel values in SAR
+        # Default baseline data with realistic hotel values in SAR
         BASELINE_DATA = {
             "occupancy": 75,
-            "revenue": 450000,  # 450K SAR monthly revenue
-            "costs": 270000,    # 270K SAR monthly costs
-            "profit": 180000,   # 180K SAR monthly profit
-            "revpar": 450000 / (75 * 100), # Assuming 100 rooms
+            "revenue": 450000,
+            "costs": 270000,
+            "profit": 180000,
+            "revpar": 450000 / (75 * 100),
             "goppar": 180000 / (75 * 100),
             "total_revenue": 450000,
             "total_cost": 270000,
-            "net_profit": 180000
+            "net_profit": 180000,
+            "room_counts": {
+                "Standard": 50,
+                "Deluxe": 30,
+                "Suite": 15,
+                "Presidential": 5
+            }
         }
 
         # Set initial occupancy to baseline
@@ -612,7 +614,7 @@ class WhatIfPanel(QWidget):
         self._on_control_changed()
 
     @Slot()
-    def _on_control_changed(self):
+    def _on_control_changed(self) -> None:
         """Handle any control value change and update UI labels."""
         # Debounce to avoid recalculating too frequently
         if not hasattr(self, "_last_update"):
@@ -634,7 +636,6 @@ class WhatIfPanel(QWidget):
         # Update spinbox prefixes
         for dept, spinbox in self.staff_spinboxes.items():
             spinbox.setPrefix("+" if spinbox.value() >= 0 else "")
-
 
         # Calculate impact and update KPIs
         if ELASTICITY_MATRIX is not None and BASELINE_DATA is not None:
@@ -658,7 +659,7 @@ class WhatIfPanel(QWidget):
         else:
             print("Warning: ELASTICITY_MATRIX or BASELINE_DATA is None")
 
-    def _get_current_scenario(self):
+    def _get_current_scenario(self) -> Dict:
         """Get current values from all controls"""
         # Room rates
         rates = {}
@@ -680,108 +681,108 @@ class WhatIfPanel(QWidget):
                 promotions.append(promo_id)
 
         return {
-            "rates": rates,  # Changed from "room_rates"
-            "occupancy": occupancy,  # Changed from "target_occupancy"
+            "rates": rates,
+            "occupancy": occupancy,
             "staffing": staffing,
             "promotions": promotions,
             "date_range": (date.today(), date.today() + timedelta(days=29))
         }
 
-    def _local_calc(self, scenario):
-        """Perform local calculation using simplified logic"""
-        if ELASTICITY_MATRIX is None or BASELINE_DATA is None:
-            return None
+    def _local_calc(self, scenario: Dict) -> Dict:
+        """Perform realistic financial impact calculation"""
+        # Get baseline values
+        baseline_revenue = BASELINE_DATA["total_revenue"]
+        baseline_cost = BASELINE_DATA["total_cost"]
+        baseline_profit = BASELINE_DATA["net_profit"]
+        baseline_occupancy = BASELINE_DATA["occupancy"]
+        baseline_revpar = BASELINE_DATA["revpar"]
+        baseline_goppar = BASELINE_DATA["goppar"]
+        room_counts = BASELINE_DATA["room_counts"]
+        total_rooms = sum(room_counts.values())
 
-        try:
-            # Get baseline values
-            baseline_revenue = BASELINE_DATA["total_revenue"]
-            baseline_cost = BASELINE_DATA["total_cost"]
-            baseline_profit = BASELINE_DATA["net_profit"]
-            baseline_occupancy = BASELINE_DATA["occupancy"]
-            baseline_revpar = BASELINE_DATA["revpar"]
-            baseline_goppar = BASELINE_DATA["goppar"]
+        # Initialize impact trackers
+        revenue_impact = 0
+        cost_impact = 0
+        occupancy_change = scenario["occupancy"] - baseline_occupancy
 
-            # Simplified waterfall data calculation with realistic values
+        # Calculate room revenue impacts with elasticity
+        for i, room_type in enumerate(ROOM_TYPES):
+            base_rate = ELASTICITY_MATRIX[i][0]
+            elasticity = ELASTICITY_MATRIX[i][1]
+            rate_change = scenario["rates"].get(room_type, 0)
+            
+            # Calculate demand change based on price elasticity
+            demand_factor = 1 - (elasticity * (rate_change / base_rate))
+            room_revenue = (base_rate + rate_change) * room_counts[room_type] * 30
+            revenue_impact += room_revenue * demand_factor - (base_rate * room_counts[room_type] * 30)
 
-            # Room rate impact (simplified calculation)
-            total_rate_change = sum(scenario["rates"].values())
-            rate_impact_factor = total_rate_change * 0.8  # 80% of rate changes flow to profit
+        # Occupancy impact (independent of price)
+        occupancy_impact = occupancy_change * 0.01 * baseline_revenue
 
-            # Occupancy impact
-            occupancy_change_pct = scenario.get("occupancy", 75) - baseline_occupancy
-            occupancy_impact_factor = occupancy_change_pct * baseline_profit * 0.02  # 2% profit change per 1% occupancy
+        # Promotion impact
+        promo_count = len(scenario["promotions"])
+        promo_cost = promo_count * 2000  # Base cost per promotion
+        promo_revenue_boost = 0.05 * baseline_revenue if promo_count > 0 else 0
+        net_promo_impact = promo_revenue_boost - promo_cost
 
-            # Promotion impact (cost of promotions)
-            promo_count = len(scenario.get("promotions", []))
-            promo_impact_factor = -promo_count * 2000  # Each promo costs ~2000 SAR
+        # Staffing impact with diminishing returns
+        staff_changes = scenario["staffing"]
+        hk_change = staff_changes.get("housekeeping", 0)
+        fb_change = staff_changes.get("f&b", 0)
+        
+        # Cost per staff with efficiency factors
+        hk_cost = 2500 * hk_change * (1 - 0.02 * max(0, hk_change))
+        fb_cost = 3000 * fb_change * (1 - 0.015 * max(0, fb_change))
+        staff_cost_impact = hk_cost + fb_cost
+        
+        # Staff efficiency impact on revenue
+        staff_revenue_impact = 0.01 * baseline_revenue * (hk_change + fb_change)
 
-            # Staffing impact
-            staff_changes = scenario.get("staffing", {})
-            total_staff_change = staff_changes.get("housekeeping", 0) + staff_changes.get("fnb", 0)
-            staff_impact_factor = total_staff_change * -3000  # Each FTE costs 3000 SAR per month
+        # Total revenue impact
+        total_revenue_impact = revenue_impact + occupancy_impact + net_promo_impact + staff_revenue_impact
+        total_cost_impact = staff_cost_impact - (0.3 * total_revenue_impact)  # Variable cost portion
+        
+        # Final values
+        final_revenue = baseline_revenue + total_revenue_impact
+        final_cost = baseline_cost + total_cost_impact
+        final_profit = final_revenue - final_cost
+        
+        # Calculate RevPAR and GOPPAR
+        final_revpar = final_revenue / (total_rooms * 30)
+        final_goppar = final_profit / (total_rooms * 30)
+        
+        # Calculate percentage changes
+        deltas_percent = {
+            "revpar": ((final_revpar - baseline_revpar) / baseline_revpar * 100) if baseline_revpar > 0 else 0,
+            "goppar": ((final_goppar - baseline_goppar) / baseline_goppar * 100) if baseline_goppar > 0 else 0,
+            "revenue": (total_revenue_impact / baseline_revenue * 100) if baseline_revenue > 0 else 0,
+            "cost": (total_cost_impact / baseline_cost * 100) if baseline_cost > 0 else 0,
+            "profit": ((final_profit - baseline_profit) / baseline_profit * 100) if baseline_profit > 0 else 0
+        }
 
-            # Calculate total impacts
-            total_revenue_impact = rate_impact_factor * 1.2 + occupancy_impact_factor * 0.5  # Revenue benefits more from rates and occupancy
-            total_cost_impact = -staff_impact_factor + (promo_count * 500)  # Staff costs and promo costs
-            total_profit_impact = rate_impact_factor + occupancy_impact_factor + promo_impact_factor + staff_impact_factor
+        # Waterfall data
+        waterfall_data = {
+            "baseline": float(baseline_profit),
+            "price": float(revenue_impact),
+            "occupancy": float(occupancy_impact),
+            "promo": float(net_promo_impact),
+            "staff": float(staff_revenue_impact - staff_cost_impact),
+            "final": float(final_profit)
+        }
 
-            # Calculate final values
-            final_revenue = baseline_revenue + total_revenue_impact
-            final_cost = baseline_cost + total_cost_impact
-            final_profit = baseline_profit + total_profit_impact
+        return {
+            "deltas_percent": deltas_percent,
+            "waterfall": waterfall_data
+        }
 
-            # Calculate RevPAR and GOPPAR changes (simplified)
-            revenue_change_pct = total_revenue_impact / baseline_revenue if baseline_revenue > 0 else 0
-            final_revpar = baseline_revpar * (1 + revenue_change_pct)
-            final_goppar = baseline_goppar * (1 + (total_profit_impact / baseline_profit) if baseline_profit > 0 else 0)
-
-            # Calculate percentage changes
-            deltas_percent = {
-                "revpar": ((final_revpar - baseline_revpar) / baseline_revpar * 100) if baseline_revpar > 0 else 0,
-                "goppar": ((final_goppar - baseline_goppar) / baseline_goppar * 100) if baseline_goppar > 0 else 0,
-                "revenue": (total_revenue_impact / baseline_revenue * 100) if baseline_revenue > 0 else 0,
-                "cost": (total_cost_impact / baseline_cost * 100) if baseline_cost > 0 else 0,
-                "profit": (total_profit_impact / baseline_profit * 100) if baseline_profit > 0 else 0
-            }
-
-            # Waterfall data
-            waterfall_data = {
-                "baseline": float(baseline_profit),
-                "price": float(rate_impact_factor),
-                "occupancy": float(occupancy_impact_factor),
-                "promo": float(promo_impact_factor),
-                "staff": float(staff_impact_factor),
-                "final": float(final_profit)
-            }
-
-            result = {
-                "deltas": {
-                    "revpar": final_revpar - baseline_revpar,
-                    "goppar": final_goppar - baseline_goppar,
-                    "revenue": total_revenue_impact,
-                    "cost": total_cost_impact,
-                    "profit": total_profit_impact
-                },
-                "deltas_percent": deltas_percent,
-                "waterfall": waterfall_data
-            }
-
-            return result
-
-        except Exception as e:
-            print(f"Error in local calculation: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-
-    def _update_results_display(self, results):
+    def _update_results_display(self, results: Dict) -> None:
         """Update the UI with calculation results"""
         if results is None:
             # Clear displays or show error
             for widget in self.kpi_widgets.values():
                 widget.setText("--")
             # Clear waterfall chart
-            self.waterfall_chart = create_plotly_widget(go.Figure()) # Empty figure
+            self.waterfall_chart = create_plotly_widget(go.Figure())
             return
 
         # Update KPI tiles
@@ -802,44 +803,43 @@ class WhatIfPanel(QWidget):
             formatted_value = f"{delta_percent:+.1f}%"
 
             widget.setText(formatted_value)
-            widget.setStyleSheet(f"font-size: 18pt; font-weight: bold; color: {color}; padding: 4px 0 2px 0;") # Adjusted font size and padding
+            widget.setStyleSheet(f"font-size: 18pt; font-weight: bold; color: {color}; padding: 4px 0 2px 0;")
 
         # Update waterfall chart
         self._update_waterfall_chart(results["waterfall"])
 
-    def _get_impact_color(self, value, invert=False):
+    def _get_impact_color(self, value: float, invert: bool = False) -> str:
         """Get color based on impact (green=good, red=bad)"""
-        if abs(value) < 0.1:  # Near zero, slightly increased threshold for "neutral"
+        if abs(value) < 0.1:
             return "#6c757d"  # Muted Gray
 
         if invert:
             value = -value  # For costs, negative is good
 
-        if value >= 5: # Strong positive impact
+        if value >= 5:
             return "#28a745"  # Green
-        elif value >= 1: # Moderate positive impact
-            return "#20c997" # Teal-ish green
-        elif value <= -5: # Strong negative impact
+        if value >= 1:
+            return "#20c997"  # Teal
+        if value <= -5:
             return "#dc3545"  # Red
-        elif value <= -1: # Moderate negative impact
-            return "#fd7e14" # Orange-red
-        else:
-            return "#ffc107"  # Yellow/Amber for small positive/negative
+        if value <= -1:
+            return "#fd7e14"  # Orange
+        return "#ffc107"  # Yellow
 
-    def _update_waterfall_chart(self, data):
+    def _update_waterfall_chart(self, data: Dict) -> None:
         """Update the waterfall chart with new data"""
         fig = go.Figure(go.Waterfall(
             name="P&L Impact",
             orientation="v",
             measure=["absolute", "relative", "relative", "relative", "relative", "total"],
-            x=["Baseline P&L", "Price Impact", "Occupancy Impact", "Promotions Cost/Benefit", "Staffing Cost/Benefit", "New P&L"],
+            x=["Baseline", "Price Impact", "Occupancy Impact", "Promotions", "Staffing", "Final"],
             y=[
                 data["baseline"],
                 data["price"],
                 data["occupancy"],
                 data["promo"],
                 data["staff"],
-                data["final"] # Use the calculated final value explicitly
+                data["final"]
             ],
             text=[
                 f"{format_currency(data['baseline'])}",
@@ -850,35 +850,37 @@ class WhatIfPanel(QWidget):
                 f"{format_currency(data['final'])}"
             ],
             textposition="outside",
-            connector={"line": {"color": "#6c757d", "dash": "dot"}}, # Muted connector
-            decreasing={"marker": {"color": "#dc3545", "line": {"color": "#dc3545", "width": 1}}}, # Red
-            increasing={"marker": {"color": "#28a745", "line": {"color": "#28a745", "width": 1}}}, # Green
-            totals={"marker": {"color": "#007bff", "line": {"color": "#007bff", "width": 1}}} # Blue for totals
+            connector={"line": {"color": "#6c757d", "dash": "dot"}},
+            decreasing={"marker": {"color": "#e74c3c", "line": {"color": "#c0392b", "width": 1}}},
+            increasing={"marker": {"color": "#2ecc71", "line": {"color": "#27ae60", "width": 1}}},
+            totals={"marker": {"color": "#3498db", "line": {"color": "#2980b9", "width": 1}}}
         ))
 
         fig.update_layout(
-            title_text="<b>P&L Impact Breakdown (SAR)</b>",
+            title_text="<b>Profit & Loss Impact (30 Days)</b>",
             title_font_size=16,
             showlegend=False,
             height=350,
             margin=dict(t=60, l=40, r=40, b=50),
-            plot_bgcolor='#f8f9fa', # Light plot background
-            paper_bgcolor='#ffffff', # White paper background
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='#ffffff',
             font=dict(family="Arial, sans-serif", size=10, color="#343a40"),
             xaxis_title="Impact Categories",
-            yaxis_title="Amount (SAR)"
+            yaxis_title="Amount (SAR)",
+            hovermode="x unified"
         )
+
+        # Add a horizontal line at baseline
+        fig.add_hline(y=data["baseline"], line_dash="dot", line_color="#7f8c8d")
 
         # Update the widget
         new_chart = create_plotly_widget(fig)
 
         # Replace the old waterfall chart widget with the new one
         try:
-            # Get the parent widget and its layout
             parent_widget = self.waterfall_chart.parent()
             if parent_widget and hasattr(parent_widget, 'layout') and parent_widget.layout():
                 layout = parent_widget.layout()
-                # Find the index of the current widget and replace it
                 for i in range(layout.count()):
                     item = layout.itemAt(i)
                     if item and item.widget() == self.waterfall_chart:
@@ -887,134 +889,38 @@ class WhatIfPanel(QWidget):
                         layout.insertWidget(i, new_chart)
                         break
                 else:
-                    # If not found in layout, just add the new widget
                     layout.addWidget(new_chart)
                     self.waterfall_chart.deleteLater()
             else:
-                # Fallback: just delete the old widget and update reference
                 self.waterfall_chart.deleteLater()
         except Exception as e:
             print(f"Error replacing waterfall chart: {e}")
-            # Fallback: just update the reference
             if hasattr(self, 'waterfall_chart'):
                 self.waterfall_chart.deleteLater()
 
         self.waterfall_chart = new_chart
-        self.waterfall_chart.setMinimumHeight(350) # Maintain size
+        self.waterfall_chart.setMinimumHeight(350)
         self.waterfall_chart.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-
     @Slot(dict)
-    def _handle_fallback(self, scenario):
+    def _handle_fallback(self, scenario: Dict) -> None:
         """Handle server-side calculation for longer periods"""
         # For now, just use local calculation as fallback
         self._fetch_server_calculation(scenario)
 
-    def _fetch_server_calculation(self, scenario):
+    def _fetch_server_calculation(self, scenario: Dict) -> None:
         """Simplified calculation without server dependency"""
         try:
             # Use local calculation as fallback
             print("Using local calculation fallback")
-            result = self._local_calc(scenario) # Use the main local_calc
+            result = self._local_calc(scenario)
             self._update_results_display(result)
         except Exception as e:
             print(f"Error in fallback calculation: {e}")
 
-    # The _calculate_local_scenario and _transform_server_response methods are likely remnants
-    # or for different contexts. Given _local_calc is the main one now, these might be redundant.
-    # Keeping them for completeness but they are not called in the updated flow.
-    def _calculate_local_scenario(self, scenario):
-        """Local scenario calculation - *Deprecated in favor of _local_calc*"""
-        # This function's logic is simpler and doesn't use the elasticity matrix fully.
-        # It's kept for original structure but not used in current `_fetch_server_calculation` after my change.
-        room_rates = scenario.get("room_rates", {})
-        target_occupancy = scenario.get("target_occupancy", 75)
-
-        # Calculate basic metrics
-        # Placeholder calculation if BASELINE_DATA is not fully populated or for a very simple model
-        base_revenue_per_room_type = {
-            "Standard": 10000, "Deluxe": 15000, "Suite": 20000, "Presidential": 30000
-        }
-        total_revenue = 0
-        for room_type, rate_change in room_rates.items():
-            # Assume rate_change is SAR amount. Base revenue adjusted by a simple factor.
-            # This is a very rough estimate.
-            total_revenue += (base_revenue_per_room_type.get(room_type, 0) + rate_change * 100) * (target_occupancy / 100.0)
-
-        total_costs = total_revenue * 0.6  # Assume 60% cost ratio
-        profit = total_revenue - total_costs
-
-        # Mock waterfall data based on this simple calculation
-        baseline_profit_mock = BASELINE_DATA.get("net_profit", 40000) if BASELINE_DATA else 40000
-        baseline_revenue_mock = BASELINE_DATA.get("total_revenue", 100000) if BASELINE_DATA else 100000
-        baseline_costs_mock = BASELINE_DATA.get("total_cost", 60000) if BASELINE_DATA else 60000
-
-        # Simplified profit changes for waterfall
-        mock_price_impact = (total_revenue - baseline_revenue_mock) * 0.5
-        mock_occupancy_impact = (total_revenue - baseline_revenue_mock) * 0.5
-        mock_staff_impact = 0 # No staff logic in this simple calc
-        mock_promo_impact = 0 # No promo logic in this simple calc
-
-        return {
-            "revenue": total_revenue,
-            "costs": total_costs,
-            "profit": profit,
-            "occupancy": target_occupancy,
-            "deltas": { # Simplified deltas for consistency
-                "revpar": (total_revenue / (target_occupancy/100) / 30) - (baseline_revenue_mock / (BASELINE_DATA["occupancy"]/100) / 30) if (target_occupancy and BASELINE_DATA and BASELINE_DATA["occupancy"]) else 0,
-                "goppar": (profit / (target_occupancy/100) / 30) - (baseline_profit_mock / (BASELINE_DATA["occupancy"]/100) / 30) if (target_occupancy and BASELINE_DATA and BASELINE_DATA["occupancy"]) else 0,
-                "revenue": total_revenue - baseline_revenue_mock,
-                "cost": total_costs - baseline_costs_mock,
-                "profit": profit - baseline_profit_mock
-            },
-            "deltas_percent": {
-                "revpar": ((total_revenue / (target_occupancy/100)) / baseline_revenue_mock - 1) * 100 if baseline_revenue_mock and target_occupancy else 0,
-                "goppar": (profit / baseline_profit_mock - 1) * 100 if baseline_profit_mock else 0,
-                "revenue": (total_revenue / baseline_revenue_mock - 1) * 100 if baseline_revenue_mock else 0,
-                "cost": (total_costs / baseline_costs_mock - 1) * 100 if baseline_costs_mock else 0,
-                "profit": (profit / baseline_profit_mock - 1) * 100 if baseline_profit_mock else 0
-            },
-            "waterfall": {
-                "baseline": baseline_profit_mock,
-                "price": mock_price_impact,
-                "occupancy": mock_occupancy_impact,
-                "promo": mock_promo_impact,
-                "staff": mock_staff_impact,
-                "final": profit
-            }
-        }
-
-    def _transform_server_response(self, server_result):
-        """Transform server response to match local calculation format - *Not currently used*"""
-        # This method is for when a server actually provides a response.
-        # Since we're using a local fallback for now, it's not strictly necessary.
-        return {
-            "deltas": {
-                "revpar": server_result.get("revpar_delta", 0.0),
-                "goppar": server_result.get("goppar_delta", 0.0),
-                "revenue": server_result.get("revenue_delta", 0.0),
-                "cost": server_result.get("cost_delta", 0.0),
-                "profit": server_result.get("profit_delta", 0.0)
-            },
-            "deltas_percent": {
-                "revpar": server_result.get("revpar_delta_percent", 0.0),
-                "goppar": server_result.get("goppar_delta_percent", 0.0),
-                "revenue": server_result.get("revenue_delta_percent", 0.0),
-                "cost": server_result.get("cost_delta_percent", 0.0),
-                "profit": server_result.get("profit_delta_percent", 0.0)
-            },
-            "waterfall": {
-                "baseline": server_result.get("waterfall_data", {}).get("baseline", 0.0),
-                "price": server_result.get("waterfall_data", {}).get("price_impact", 0.0),
-                "occupancy": server_result.get("waterfall_data", {}).get("occupancy_impact", 0.0),
-                "promo": server_result.get("waterfall_data", {}).get("promo_impact", 0.0),
-                "staff": server_result.get("waterfall_data", {}).get("staff_impact", 0.0),
-                "final": server_result.get("waterfall_data", {}).get("final", 0.0)
-            }
-        }
 
 @data_required
-def display():
+def display() -> QWidget:
     """Display function for the What-If Turbo view"""
     try:
         return WhatIfPanel()
