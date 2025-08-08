@@ -28,6 +28,8 @@ import numpy as np
 
 # Import the data_required decorator from utils
 from views.utils import data_required
+# Import data validation utilities
+from views.data_validator import DataValidator, validate_revenue_data
 
 
 def _plotly_view(fig):

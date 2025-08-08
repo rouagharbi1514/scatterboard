@@ -37,18 +37,7 @@ except ImportError:
     display_room_profit = None
     display_room_type_profitability = None
 
-try:
-    from .guests import display_facilities_usage as guests_facilities_usage_imported
-    from .guests import display_cancellation_analysis as guests_cancellation_analysis_imported
-    from .guests import display_age_analysis as guests_age_analysis_imported
-    from .guests import display_preferences as guests_preferences_display_imported
-    from .guests import display as guests_display_imported
-except ImportError:
-    guests_facilities_usage_imported = None
-    guests_cancellation_analysis_imported = None
-    guests_age_analysis_imported = None
-    guests_preferences_display_imported = None
-    guests_display_imported = None
+# Guest analysis module removed
 
 try:
     from .room_cost import display as room_cost_display
@@ -168,11 +157,7 @@ def placeholder_display(*args, **kwargs):
 marketing_display = marketing_display_imported or placeholder_display
 company_display = company_display_imported or placeholder_display
 housekeeping_display = housekeeping_display_imported or placeholder_display
-guests_display = guests_display_imported or placeholder_display
-guests_preferences_display = guests_preferences_display_imported or placeholder_display
-guests_age_analysis = guests_age_analysis_imported or placeholder_display
-guests_cancellation_analysis = guests_cancellation_analysis_imported or placeholder_display
-guests_facilities_usage = guests_facilities_usage_imported or placeholder_display
+# Guest display functions removed
 
 # Operations displays
 operations_fb_display = display_fb or PlaceholderModule.display
@@ -765,11 +750,7 @@ __all__ = [
     "room_cost_display",
     "display_room_profit",
     "display_room_type_profitability",
-    "guests_display",
-    "guests_preferences_display",
-    "guests_age_analysis",
-    "guests_cancellation_analysis",
-    "guests_facilities_usage",
+
     "file_upload_display",
     "pricing_display",
     "ml_pricing_display",

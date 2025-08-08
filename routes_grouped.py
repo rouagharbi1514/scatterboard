@@ -35,9 +35,7 @@ ROUTES_GROUPED = {
         "Profitability by Room": profitability_room_display,
         "Profitability by Room Type": profitability_type_display,
     },
-    "Guest Analysis": {
-        "Guest Overview": placeholder_display,
-    },
+
     "Marketing": {
         "Marketing Performance": marketing_display,
     },

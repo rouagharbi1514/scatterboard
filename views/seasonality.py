@@ -1,4 +1,3 @@
-# flake8: noqa
 # views/seasonality.py
 """
 Seasonality Analysis view
