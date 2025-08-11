@@ -195,7 +195,7 @@ class ForecastScatterView(QWidget):
         layout.setSpacing(15)
         
         # Title
-        title = QLabel("Revenue Forecasting (LSTM)")
+        title = QLabel("Explore the Future (LSTM)")
         title.setStyleSheet("font-size: 18pt; font-weight: bold;")
         layout.addWidget(title)
         

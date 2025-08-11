@@ -383,35 +383,51 @@ class RoomCostView(QWidget):
         # Ensure index (room types) are strings
         cost_summary.index = cost_summary.index.astype(str)
 
+        # Create a more user-friendly donut chart showing cost distribution
         fig3 = go.Figure()
 
-        # Add bars for average cost
-        fig3.add_trace(go.Bar(
-            x=cost_summary.index,
-            y=cost_summary['mean'],
-            name='Average Cost',
-            marker_color='lightblue',
-            text=[f'${val:.2f}' for val in cost_summary['mean']],
-            textposition='outside'
+        # Calculate total costs for proportional representation
+        room_counts = df.groupby('room_type').size()
+        total_costs = cost_summary['mean'] * room_counts
+        
+        # Create donut chart
+        fig3.add_trace(go.Pie(
+            labels=cost_summary.index,
+            values=total_costs,
+            hole=0.4,
+            textinfo='label+percent',
+            textposition='outside',
+            marker=dict(
+                colors=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'],
+                line=dict(color='#FFFFFF', width=2)
+            ),
+            hovertemplate='<b>%{label}</b><br>' +
+                         'Average Cost: $%{customdata:.2f}<br>' +
+                         'Share of Total Costs: %{percent}<br>' +
+                         '<extra></extra>',
+            customdata=cost_summary['mean']
         ))
 
-        # Add error bars for min/max range
-        fig3.update_traces(
-            error_y=dict(
-                type='data',
-                symmetric=False,
-                array=cost_summary['max'] - cost_summary['mean'],
-                arrayminus=cost_summary['mean'] - cost_summary['min'],
-                visible=True
-            )
-        )
-
         fig3.update_layout(
-            title="Cost per Occupied Room Summary by Room Type",
-            xaxis_title="Room Type",
-            yaxis_title="Cost per Occupied Room ($)",
+            title="Cost Distribution by Room Type",
             template="plotly_white",
-            height=500
+            height=500,
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                yanchor="middle",
+                y=0.5,
+                xanchor="left",
+                x=1.05
+            ),
+            annotations=[
+                dict(
+                    text=f"Total Avg<br>Cost: ${cost_summary['mean'].mean():.2f}",
+                    x=0.5, y=0.5,
+                    font_size=14,
+                    showarrow=False
+                )
+            ]
         )
         summary_layout.addWidget(create_plotly_widget(fig3))
 
@@ -432,13 +448,13 @@ class RoomCostView(QWidget):
         highest_range = cost_summary['range'].max()
 
         explanation = (
+            f"This donut chart shows the **cost distribution** across room types based on both average cost and volume. "
             f"**{highest_cost_room}** rooms have the highest average cost at **${highest_cost:.2f}**, "
             f"while **{lowest_cost_room}** rooms are most cost-efficient at **${lowest_cost:.2f}** "
-            f"(${cost_spread:.2f} difference between room types). "
-            f"\n\nError bars show the min-max cost range for each room type. "
-            f"**{most_variable_room}** rooms show the highest cost variability with a range of "
-            f"**${highest_range:.2f}**, suggesting **{variability_performance}** cost predictability. "
-            f"Consistent costs across room types indicate better operational control."
+            f"(${cost_spread:.2f} difference). "
+            f"\n\nLarger slices indicate room types that contribute more to total operational costs. "
+            f"The center shows the overall average cost per room (${cost_summary['mean'].mean():.2f}). "
+            f"Focus on optimizing costs for room types with larger slices for maximum impact."
         )
 
         summary_layout.addWidget(_collapsible(explanation))

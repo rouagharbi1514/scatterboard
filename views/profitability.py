@@ -422,65 +422,79 @@ def _weekday_weekend_profit(df: pd.DataFrame) -> tuple[go.Figure, str]:
 
 
 def _profit_heatmap(df: pd.DataFrame) -> tuple[go.Figure, str]:
-    heat = df.pivot_table(
-        index=df["Date"].dt.weekday,
-        columns=df["Date"].dt.month,
-        values="ProfitPerRoom",
-        aggfunc="mean",
-    )
-
-    # Calculate KPI - highest vs average profit cell
-    avg_profit = heat.mean().mean()
-    max_profit = heat.max().max()
-    max_i, max_j = np.unravel_index(heat.values.argmax(), heat.shape)
-
+    # Create a more user-friendly bar chart showing profit by day of week
     weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    max_day = weekday_names[max_i]
-    max_month = max_j + 1  # Adjust for 1-based month
-
+    
+    # Add weekday column
+    df_copy = df.copy()
+    df_copy['weekday'] = df_copy['Date'].dt.weekday
+    df_copy['weekday_name'] = df_copy['weekday'].map(dict(enumerate(weekday_names)))
+    
+    # Calculate average profit by weekday
+    weekday_profit = df_copy.groupby('weekday_name')['ProfitPerRoom'].agg(['mean', 'count']).reset_index()
+    weekday_profit = weekday_profit.reindex([weekday_names.index(day) for day in weekday_profit['weekday_name']]).reset_index(drop=True)
+    weekday_profit['weekday_name'] = weekday_names
+    
+    # Calculate KPIs
+    avg_profit = weekday_profit['mean'].mean()
+    max_profit = weekday_profit['mean'].max()
+    max_day = weekday_profit.loc[weekday_profit['mean'].idxmax(), 'weekday_name']
+    min_profit = weekday_profit['mean'].min()
+    min_day = weekday_profit.loc[weekday_profit['mean'].idxmin(), 'weekday_name']
+    
     if avg_profit > 0:
         max_uplift = ((max_profit - avg_profit) / avg_profit) * 100
     else:
         max_uplift = 0
-
+    
     performance = _classify_performance(max_uplift)
-
+    
     explanation = (
-        f"The highest profit per room (${max_profit:.2f}) occurs on {max_day}s in month {max_month}, "
-        f"which is {max_uplift:.1f}% above average (${avg_profit:.2f}) - a **{performance}** uplift. "
-        f"Darker cells represent higher profit opportunities, suggesting potential for targeted pricing strategies."
+        f"**{max_day}** is the most profitable day with an average of **${max_profit:.2f}** per room, "
+        f"which is {max_uplift:.1f}% above the weekly average (${avg_profit:.2f}) - a **{performance}** performance. "
+        f"**{min_day}** shows the lowest profit at **${min_profit:.2f}** per room. "
+        f"Use this insight to optimize pricing strategies and staffing for different days of the week."
     )
-
+    
     # Create Plotly figure
     fig = go.Figure()
-
-    # Create heatmap
-    fig.add_trace(go.Heatmap(
-        z=heat.values,
-        x=[f"Month {i}" for i in heat.columns],
-        y=weekday_names,
-        colorscale='Viridis',
-        showscale=True,
-        colorbar=dict(
-            title="Profit per Room ($)"
-        ),
-        text=[[f"${val:.0f}" if not pd.isna(val) else "" for val in row] for row in heat.values],
-        texttemplate="%{text}",
-        textfont={"size": 10},
-        hoverongaps=False
+    
+    # Create bar chart with color gradient based on profit levels
+    colors = ['#FF6B6B' if profit < avg_profit else '#4ECDC4' if profit < max_profit * 0.9 else '#2ECC71' 
+              for profit in weekday_profit['mean']]
+    
+    fig.add_trace(go.Bar(
+        x=weekday_profit['weekday_name'],
+        y=weekday_profit['mean'],
+        marker_color=colors,
+        text=[f'${val:.0f}' for val in weekday_profit['mean']],
+        textposition='outside',
+        hovertemplate='<b>%{x}</b><br>' +
+                     'Average Profit: $%{y:.2f}<br>' +
+                     'Data Points: %{customdata}<br>' +
+                     '<extra></extra>',
+        customdata=weekday_profit['count']
     ))
-
+    
+    # Add average line
+    fig.add_hline(
+        y=avg_profit,
+        line_dash="dash",
+        line_color="red",
+        annotation_text=f"Weekly Average: ${avg_profit:.2f}",
+        annotation_position="top right"
+    )
+    
     fig.update_layout(
-        title="Profit per Room Heatmap",
-        xaxis_title="Month",
-        yaxis_title="Day of Week",
+        title="Profit per Room by Day of Week",
+        xaxis_title="Day of Week",
+        yaxis_title="Average Profit per Room ($)",
         template="plotly_white",
         height=500,
         width=800,
-        xaxis=dict(side="bottom"),
-        yaxis=dict(autorange="reversed")  # Monday at top
+        showlegend=False
     )
-
+    
     return fig, explanation
 
 
@@ -800,7 +814,7 @@ def display_room_profit() -> QWidget:
             {"RoomRevenue", "Date"},
         ),  # helper handles alt paths
         ("Weekday/Weekend", _weekday_weekend_profit, {"Profit", "Date"}),
-        ("Profit Heatmap", _profit_heatmap, {"ProfitPerRoom", "Date"}),
+        ("Weekly Profit Analysis", _profit_heatmap, {"ProfitPerRoom", "Date"}),
     ]
     return _build_page("Room Profit Analysis", charts, base_df)
 

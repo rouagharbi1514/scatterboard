@@ -8,7 +8,7 @@ KPI Dashboard
 
 from __future__ import annotations
 import pandas as pd
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -70,9 +70,17 @@ def display() -> QWidget:
 
     root = QWidget()
     root.setLayout(QVBoxLayout())
+    
+    # Add spacing at the top
+    root.layout().addSpacing(20)
+    
     hdr = QLabel("Key Performance Indicators")
-    hdr.setStyleSheet("font-size:18pt;font-weight:bold;")
+    hdr.setStyleSheet("font-size:18pt;font-weight:bold;text-align:center;")
+    hdr.setAlignment(Qt.AlignCenter)
     root.layout().addWidget(hdr)
+    
+    # Add more spacing below the title
+    root.layout().addSpacing(15)
 
     # date pickers
     start_edit, end_edit = QDateEdit(), QDateEdit()

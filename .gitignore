@@ -1,81 +1,66 @@
 # Virtual environments
 .venv/
 .venv-torch/
-.env
+venv/
+env/
 
-# Python cache files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Distribution / packaging
-.Python
+# Build artifacts
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
 *.spec
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Logs
 *.log
 
-# Data files (if sensitive)
-# data/
+# Environment variables
+.env
+
+# Test cache
+.pytest_cache/
 
 # Temporary files
 *.tmp
 *.temp
 
-# Node modules (if any)
-node_modules/
+# PyInstaller
+*.manifest
+*.spec
 
-# Environment variables
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Data files (optional - uncomment if you don't want to track data)
+# *.xlsx
+# *.csv
+# *.json
+
+# Icons and images (if they're generated)
+*.ico
+*.icns
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Batch files
+*.bat
+*.sh

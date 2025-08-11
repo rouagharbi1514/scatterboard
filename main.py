@@ -46,6 +46,7 @@ from routes_grouped import ROUTES_GROUPED
 import views                                 # ✨ NEW – needed for file-upload view
 import data  # provides ``load_dataframe``
 import resources_rc  # noqa: F401  (import registers Qt resources at runtime)
+from auth import authenticate_user
 
 # ─────────────────────────────── application window
 
@@ -131,6 +132,8 @@ class MainWindow(QMainWindow):
         self._show_welcome()
 
         # global stylesheet
+        # Initialize theme and apply stylesheet
+        self.current_theme = "light"  # default theme
         self._apply_stylesheet()
 
         # Start timer to update the time
@@ -140,114 +143,367 @@ class MainWindow(QMainWindow):
 
     # ──────────────────────── stylesheet
     def _apply_stylesheet(self) -> None:
-        """Apply a modern, dark-themed stylesheet."""
+        """Apply the stylesheet for the current theme."""
 
-        self.setStyleSheet(
-            # (long CSS omitted for brevity – identical to original)
-            self._stylesheet(),
-        )
+        if getattr(self, "current_theme", "light") == "dark":
+            css = self._stylesheet_dark()
+            if hasattr(self, "theme_toggle_btn"):
+                self.theme_toggle_btn.setText("☀️ Light Mode")
+        else:
+            css = self._stylesheet_light()
+            if hasattr(self, "theme_toggle_btn"):
+                self.theme_toggle_btn.setText("🌙 Dark Mode")
+        self.setStyleSheet(css)
 
     # pulled out to keep line-length sane
     @staticmethod
-    def _stylesheet() -> str:
-        """Return application-wide Qt CSS."""
-
+    def _stylesheet_light() -> str:
+        """Return light theme Qt CSS with a refined luxury aesthetic."""
         return (
             """
-            /* Main container */
-            #mainContainer { background-color:#12151C; border-radius:10px; }
-            /* Header */
-            #header { background:#1A1E27; border-bottom:1px solid #2E3444;
-                border-top-left-radius:10px; border-top-right-radius:10px; }
-            #headerTitle { font-family:'Segoe UI',Arial,sans-serif; font-size:18px;
-                font-weight:bold; color:#E0E6F5; letter-spacing:2px; }
-            #versionLabel { color:#5D6A85; font-size:12px; }
-            #contentFrame { background:#171B24; border-radius:8px; margin:5px; }
-            #sidebar { background:#1A1E27; border-right:1px solid #2E3444;
-                min-width:280px; max-width:280px; }
-            QLabel { color:#E0E6F5; }
-            .section-header { background:linear-gradient(90deg,#2A3240,#1A1E27);
-                color:#B8C5E3; padding:15px; font-size:12px; font-weight:bold;
-                letter-spacing:1.5px; border-left:3px solid #4575DE;
-                margin:8px 0 4px 0; border-radius:0 4px 4px 0; }
-            /* Buttons */
-            .nav-button { text-align:left; padding:14px 15px; margin:3px 10px;
-                border:none; border-radius:8px; background:#2A3140; color:#F0F4F8;
-                font-size:14px; font-weight:600; min-height:24px; }
-            .nav-button:hover { background:#3A4553; color:#FFFFFF;
-                border:1px solid #4575DE; transform:translateX(3px); }
-            .nav-button:pressed { background:#4A5563; color:#FFFFFF;
-                transform:translateX(1px); }
-            .nav-button:checked { background:linear-gradient(90deg,#3563D9,#4575DE);
-                color:#FFFFFF; font-weight:bold; border:1px solid #5A85F0; }
-            .upload-button { background:linear-gradient(90deg,#3F8CFF,#2D78E3);
-                color:#FFFFFF; border:none; border-radius:8px; padding:14px 15px;
-                margin:8px 12px; font-weight:bold; font-size:14px; text-align:left;
-                min-height:24px; }
-            .upload-button:hover { background:linear-gradient(90deg,#2D78E3,#1A66D1);
-                color:#FFFFFF; transform:translateY(-2px); }
-            .upload-button:pressed { background:linear-gradient(90deg,#1A66D1,#0F5ABF);
-                transform:translateY(0); }
-            QScrollBar:vertical { border:none; background:#1A1E27; width:8px;
-                border-radius:4px; }
-            QScrollBar::handle:vertical { background:#3A4255; min-height:30px;
-                border-radius:4px; }
-            QScrollBar::handle:vertical:hover { background:#4575DE; }
-            QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical,
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background:none; height:0; width:0; }
+            /* App base */
+            QMainWindow { background: #F7F8FB; color: #2A2E36; }
+            #mainContainer { background:#F7F8FB; border-radius:12px; border:1px solid #E7EAF0; }
+
+            /* Header: soft ivory + gold accent */
+            #header {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #0E1F3C, stop:1 #19355F);
+                border-bottom: 3px solid #D6B56A;
+                border-top-left-radius:12px;
+                border-top-right-radius:12px;
+                color:#FFFFFF;
+            }
+            #headerTitle { font-family:'Montserrat','Segoe UI',Arial,sans-serif; font-size:20px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#FFFFFF; }
+            #timeLabel { font-family:'Open Sans','Segoe UI',Arial; font-size:13px; color:#E9D9A4; font-weight:600; }
+            #versionLabel { color:#C5CFDF; font-size:12px; }
+
+            /* Content frame card */
+            #contentFrame {
+                background:#FFFFFF;
+                border-radius:16px;
+                margin:12px;
+                border:1px solid #E7EAF0;
+            }
+
+            /* Sidebar with gold rail */
+            #sidebar {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0E1F3C, stop:1 #19355F);
+                border-right: 3px solid #D6B56A;
+                min-width:300px; max-width:300px; color:#FFFFFF;
+            }
+            #sidebar QLabel { color:#FFFFFF; }
+
+            /* Section headers */
+            .section-header {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(214,181,106,0.18), stop:1 rgba(214,181,106,0.10));
+                color:#E9D9A4; padding:14px 20px; font-size:12px; font-weight:700;
+                font-family:'Montserrat','Segoe UI',Arial; letter-spacing:2px; text-transform:uppercase;
+                border-left:4px solid #D6B56A; margin:12px 0 8px 0; border-radius:0 8px 8px 0;
+            }
+
+            /* Navigation buttons */
+            .nav-button {
+                text-align:left; padding:14px 18px; margin:6px 12px;
+                border:none; border-radius:12px;
+                background: rgba(255,255,255,0.10);
+                color:#FFFFFF; font-size:14px; font-weight:500; font-family:'Open Sans','Segoe UI',Arial;
+                transition: all 120ms ease-in-out;
+            }
+            .nav-button:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(214,181,106,0.28), stop:1 rgba(214,181,106,0.18));
+                color:#FFFFFF; border:2px solid rgba(214,181,106,0.55);
+            }
+            .nav-button:checked {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #D6B56A, stop:1 #E5C679);
+                color:#0E1F3C; font-weight:700; border:2px solid #F0D68A;
+            }
+
+            /* Upload button */
+            .upload-button {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #3F7C7C, stop:1 #47908F);
+                color:#FFFFFF; border:none; border-radius:12px; padding:16px 20px;
+                margin:10px 14px; font-weight:700; font-size:14px; text-align:left;
+            }
+            .upload-button:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #47908F, stop:1 #57A3A2);
+            }
+
+            /* Generic buttons (content area) */
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2C59C6, stop:1 #5A86F2);
+                color:#FFFFFF; border:none; border-radius:10px; padding:10px 18px; font-weight:600;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1F4BB5, stop:1 #4C79E8);
+            }
+
+            /* Inputs */
+            QLineEdit, QTextEdit {
+                background:#FDFEFE; color:#2A2E36;
+                border:1px solid #D8DEE8; border-radius:10px; padding:10px; font-size:14px;
+            }
+            QLineEdit:focus, QTextEdit:focus { border:1px solid #2F6FDB; }
+
+            /* Tables */
+            QTableView { background:#FFFFFF; border:1px solid #E7EAF0; border-radius:12px; gridline-color:#E7EAF0; }
+            QHeaderView::section { background:#0E1F3C; color:#E9D9A4; padding:10px; border:1px solid #29456E; font-weight:700; }
+
+            /* Scrollbars */
+            QScrollBar:vertical { border:none; background:transparent; width:10px; margin:0 2px; }
+            QScrollBar::handle:vertical { background:#D6B56A; min-height:28px; border-radius:4px; }
+            QScrollBar::handle:vertical:hover { background:#E5C679; }
+            QScrollBar:horizontal { border:none; background:transparent; height:10px; margin:2px 0; }
+            QScrollBar::handle:horizontal { background:#D6B56A; min-width:28px; border-radius:4px; }
+            QScrollBar::handle:horizontal:hover { background:#E5C679; }
+
+            /* Splitter */
+            QSplitter::handle { background:#D6B56A; width:3px; }
+            QSplitter::handle:hover { background:#E5C679; }
             """
         )
 
+    @staticmethod
+    def _stylesheet_dark() -> str:
+        """Return dark theme with neon-cyber classy aesthetic."""
+        return (
+            """
+            /* App base */
+            QMainWindow { background:#0C0F17; color:#E3E8F5; }
+            #mainContainer { background-color:#0C0F17; border-radius:12px; border:1px solid #242B3A; }
+
+            /* Header: deep navy + electric gradient rail */
+            #header {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #141B2C, stop:1 #1A2440);
+                border-bottom: 3px solid #5DA0FF;
+                border-top-left-radius:12px; border-top-right-radius:12px; color:#E3E8F5;
+            }
+            #headerTitle { font-family:'Montserrat','Segoe UI',Arial; font-size:20px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#E3E8F5; }
+            #timeLabel { font-family:'Open Sans','Segoe UI',Arial; font-size:13px; color:#88B4FF; font-weight:600; }
+            #versionLabel { color:#6E7FA7; font-size:12px; }
+
+            /* Content frame as neon card */
+            #contentFrame {
+                background:#121826;
+                border-radius:16px;
+                margin:12px;
+                border:1px solid #28324A;
+            }
+
+            /* Sidebar with subtle luminous spine */
+            #sidebar {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #121A2B, stop:1 #0E1522);
+                border-right: 3px solid #28324A;
+                min-width:300px; max-width:300px; color:#E3E8F5;
+            }
+            #sidebar QLabel { color:#E3E8F5; }
+
+            /* Section header: neon ribbon */
+            .section-header {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(93,160,255,0.20), stop:1 rgba(93,160,255,0.10));
+                color:#AFC8FF; padding:14px 20px; font-size:12px; font-weight:700;
+                font-family:'Montserrat','Segoe UI',Arial; letter-spacing:2px; text-transform:uppercase;
+                border-left:4px solid #5DA0FF; margin:12px 0 8px 0; border-radius:0 8px 8px 0;
+            }
+
+            /* Navigation buttons: sleek chips */
+            .nav-button {
+                text-align:left; padding:14px 18px; margin:6px 12px;
+                border:none; border-radius:12px;
+                background:#1B2335; color:#F2F6FF;
+                font-size:14px; font-weight:500; font-family:'Open Sans','Segoe UI',Arial;
+                transition: all 120ms ease-in-out;
+            }
+            .nav-button:hover { background:#23304A; color:#FFFFFF; border:1px solid #5DA0FF; }
+            .nav-button:pressed { background:#263554; color:#FFFFFF; }
+            .nav-button:checked {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #315FD9, stop:1 #5DA0FF);
+                color:#FFFFFF; font-weight:700; border:1px solid #78B2FF;
+            }
+
+            /* Upload button: bright primary */
+            .upload-button {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3F8CFF, stop:1 #2D78E3);
+                color:#FFFFFF; border:none; border-radius:12px; padding:16px 20px; margin:10px 14px;
+                font-weight:700; font-size:14px; text-align:left;
+            }
+            .upload-button:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2D78E3, stop:1 #1A66D1); }
+
+            /* Generic content buttons */
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2E57C8, stop:1 #4D7AF0);
+                color:#FFFFFF; border:none; border-radius:10px; padding:10px 18px; font-weight:600;
+            }
+            QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #254CB8, stop:1 #3F6BE7); }
+
+            /* Inputs */
+            QLineEdit, QTextEdit {
+                background:#0F1422; color:#E3E8F5;
+                border:1px solid #2B3550; border-radius:10px; padding:10px; font-size:14px;
+            }
+            QLineEdit:focus, QTextEdit:focus { border:1px solid #5DA0FF; }
+
+            /* Tables */
+            QTableView { background:#121826; border:1px solid #28324A; border-radius:12px; gridline-color:#28324A; }
+            QHeaderView::section { background:#0F1524; color:#AFC8FF; padding:10px; border:1px solid #28324A; font-weight:700; }
+
+            /* Scrollbars: thin neon rails */
+            QScrollBar:vertical { border:none; background:transparent; width:10px; margin:0 2px; }
+            QScrollBar::handle:vertical { background:#355ACF; min-height:28px; border-radius:4px; }
+            QScrollBar::handle:vertical:hover { background:#5DA0FF; }
+            QScrollBar:horizontal { border:none; background:transparent; height:10px; margin:2px 0; }
+            QScrollBar::handle:horizontal { background:#355ACF; min-width:28px; border-radius:4px; }
+            QScrollBar::handle:horizontal:hover { background:#5DA0FF; }
+
+            /* Splitter */
+            QSplitter::handle { background:#355ACF; width:3px; }
+            QSplitter::handle:hover { background:#5DA0FF; }
+            """
+        )
+
+    # ──────────────────────── theme toggle
+    def toggle_theme(self) -> None:
+        """Toggle between light and dark themes and update UI."""
+        self.current_theme = "dark" if getattr(self, "current_theme", "light") == "light" else "light"
+        self._apply_stylesheet()
+
     # ──────────────────────── sidebar
     def _create_sidebar(self) -> QWidget:
-        """Return fully-populated sidebar widget."""
+        """Return fully-populated sidebar widget with modern styling."""
 
         sidebar_container = QWidget(objectName="sidebar")
         outer_layout = QVBoxLayout(sidebar_container)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
 
-        # logo
-        logo_container = QFrame()
-        logo_container.setMinimumHeight(80)
-        logo_layout = QHBoxLayout(logo_container)
+        # Enhanced logo section (without hotel emoji)
+        logo_container = QFrame(objectName="logoContainer")
+        logo_container.setMinimumHeight(90)
+        logo_container.setStyleSheet("""
+            #logoContainer {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(212, 175, 55, 0.15), stop:1 rgba(212, 175, 55, 0.05));
+                border-bottom: 2px solid rgba(212, 175, 55, 0.3);
+            }
+        """)
+        logo_layout = QVBoxLayout(logo_container)
+        logo_layout.setSpacing(5)
+        
+        # Main title (without emoji)
         logo_lbl = QLabel("HOTEL ANALYTICS")
-        logo_lbl.setStyleSheet(
-            "font-size:14pt;font-weight:bold;font-family:'Segoe UI';"
-            "color:#E0E6F5;letter-spacing:1px;"
-        )
+        logo_lbl.setStyleSheet("""
+            font-size: 16pt;
+            font-weight: 600;
+            font-family: 'Montserrat', 'Segoe UI', Arial, sans-serif;
+            color: #FFFFFF;
+            letter-spacing: 1.5px;
+            text-align: center;
+            margin-bottom: 2px;
+        """)
         logo_lbl.setAlignment(Qt.AlignCenter)
         logo_layout.addWidget(logo_lbl)
+        
+        # Subtitle
+        subtitle_lbl = QLabel("Premium Dashboard")
+        subtitle_lbl.setStyleSheet("""
+            font-size: 11px;
+            font-family: 'Open Sans', Arial, sans-serif;
+            color: #D4AF37;
+            letter-spacing: 0.8px;
+            text-align: center;
+            font-style: italic;
+        """)
+        subtitle_lbl.setAlignment(Qt.AlignCenter)
+        logo_layout.addWidget(subtitle_lbl)
+        
         outer_layout.addWidget(logo_container)
 
-        # separator
+        # Theme toggle button section
+        theme_container = QFrame()
+        theme_container.setStyleSheet("""
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+            padding: 10px;
+        """)
+        theme_layout = QHBoxLayout(theme_container)
+        theme_layout.setContentsMargins(15, 10, 15, 10)
+        
+        # Theme toggle button
+        self.theme_toggle_btn = QPushButton("🌙 Dark Mode")
+        self.theme_toggle_btn.setObjectName("themeToggleButton")
+        self.theme_toggle_btn.setStyleSheet("""
+            QPushButton#themeToggleButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(212, 175, 55, 0.2), stop:1 rgba(212, 175, 55, 0.1));
+                color: #D4AF37;
+                border: 1px solid rgba(212, 175, 55, 0.4);
+                border-radius: 8px;
+                padding: 8px 15px;
+                font-size: 12px;
+                font-weight: 500;
+                font-family: 'Open Sans', Arial, sans-serif;
+            }
+            QPushButton#themeToggleButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(212, 175, 55, 0.3), stop:1 rgba(212, 175, 55, 0.2));
+                border: 1px solid rgba(212, 175, 55, 0.6);
+            }
+            QPushButton#themeToggleButton:pressed {
+                background: rgba(212, 175, 55, 0.4);
+            }
+        """)
+        self.theme_toggle_btn.clicked.connect(self.toggle_theme)
+        theme_layout.addWidget(self.theme_toggle_btn)
+        
+        outer_layout.addWidget(theme_container)
+
+        # Enhanced separator
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("background:#2E3444;margin:0 10px;")
-        sep.setMaximumHeight(1)
+        sep.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 transparent, stop:0.5 #D4AF37, stop:1 transparent);
+            margin: 0 20px;
+            height: 2px;
+        """)
+        sep.setMaximumHeight(2)
         outer_layout.addWidget(sep)
 
         # scroll area for nav items
         scroll = QScrollArea(objectName="sidebarScroll")
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(
-            "QScrollArea{border:none;background:transparent;}"
-            "QScrollArea>QWidget>QWidget{background:transparent;}"
-        )
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+        """)
 
         scroll_content = QWidget()
         self.sidebar_layout = QVBoxLayout(scroll_content)
-        self.sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        self.sidebar_layout.setContentsMargins(0, 15, 0, 0)
         self.sidebar_layout.setSpacing(0)
 
-        # DATA MANAGEMENT section
-        data_hdr = QLabel("DATA MANAGEMENT")
+        # DATA MANAGEMENT section with enhanced styling
+        data_hdr = QLabel("📊 DATA MANAGEMENT")
         data_hdr.setProperty("class", "section-header")
         self.sidebar_layout.addWidget(data_hdr)
 
-        upload_btn = QPushButton("📤 File Upload", objectName="uploadButton")
+        upload_btn = QPushButton("📤  File Upload", objectName="uploadButton")
         upload_btn.setProperty("class", "upload-button")
 
         # ⬇️ Fix: pass *callable* to unified _show_view
@@ -257,10 +513,15 @@ class MainWindow(QMainWindow):
         upload_btn.clicked.connect(_show_upload)
         self.sidebar_layout.addWidget(upload_btn)
 
-        # separator
+        # Enhanced separator for sections
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet("background:#2E3444;margin:8px 10px;")
+        sep2.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 transparent, stop:0.5 rgba(212, 175, 55, 0.3), stop:1 transparent);
+            margin: 15px 20px;
+            height: 1px;
+        """)
         sep2.setMaximumHeight(1)
         self.sidebar_layout.addWidget(sep2)
 
@@ -316,12 +577,81 @@ class MainWindow(QMainWindow):
                 continue  # skip hidden groups
             self._add_view_group(group, routes)
 
+    @staticmethod
+    def _button_text(route: str) -> tuple[str, str]:
+        """Return truncated label and professional icon."""
+        max_len = 28
+        trimmed = f"{route[: max_len - 3]}..." if len(route) > max_len else route
+        lower = route.lower()
+        
+        # Font Awesome style icons for professional look
+        if "revenue" in lower:
+            icon = "💰  "
+        elif "occupancy" in lower:
+            icon = "🏨  "
+        elif "booking" in lower or "reservation" in lower:
+            icon = "📅  "
+        elif "cancellation" in lower:
+            icon = "❌  "
+        elif "forecast" in lower:
+            icon = "📊  "
+        elif "customer" in lower or "guest" in lower:
+            icon = "👥  "
+        elif "pricing" in lower:
+            icon = "💲  "
+        elif "profitability" in lower:
+            icon = "📈  "
+        elif "performance" in lower or "kpi" in lower:
+            icon = "⚡  "
+        elif "dashboard" in lower or "overview" in lower:
+            icon = "🏠  "
+        elif "seasonality" in lower:
+            icon = "📆  "
+        elif "room cost" in lower or "cost" in lower:
+            icon = "🏢  "
+        elif "housekeeping" in lower:
+            icon = "🧹  "
+        elif "f&b" in lower or "food" in lower:
+            icon = "🍽️  "
+        elif "efficiency" in lower:
+            icon = "⚙️  "
+        elif "custom" in lower or "chart" in lower:
+            icon = "📊  "
+        elif "marketing" in lower:
+            icon = "📢  "
+        elif "what if" in lower or "scenario" in lower:
+            icon = "🎯  "
+        elif "turbo" in lower:
+            icon = "⚡  "
+        elif "operational" in lower or "operations" in lower:
+            icon = "🔧  "
+        elif "advanced" in lower or "ml" in lower:
+            icon = "🤖  "
+        elif "analytics" in lower:
+            icon = "📊  "
+        else:
+            icon = "📈  "
+        return trimmed, icon
+
     def _add_view_group(
         self,
         section: str,
         routes: dict[str, callable],  # type: ignore
     ) -> None:
-        lbl = QLabel(section.upper())
+        # Enhanced section headers with icons
+        section_icons = {
+            "Overview": "🏠",
+            "Performance": "⚡",
+            "Marketing": "📢",
+            "Operations": "🔧",
+            "Advanced": "🤖",
+            "Data": "📊",
+            "What If": "🎯",
+            "Forecasting": "📊"
+        }
+        
+        icon = section_icons.get(section, "📈")
+        lbl = QLabel(f"{icon} {section.upper()}")
         lbl.setProperty("class", "section-header")
         self.sidebar_layout.addWidget(lbl)
         for name, factory in routes.items():
@@ -492,20 +822,47 @@ def _set_fallback_font(app: QApplication) -> None:
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setStyle("Fusion")
-
     try:
-        font_id = QFontDatabase.addApplicationFont(":/fonts/Roboto-Regular.ttf")
-        if font_id == -1:
-            raise RuntimeError("custom font not loaded")
-        family = QFontDatabase.applicationFontFamilies(font_id)[0]
-        app.setFont(QFont(family, 10))
-        print(f"Loaded custom font: {family}")
-    except Exception:  # pragma: no cover – visual
-        print("Falling back to system font")
-        _set_fallback_font(app)
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")
 
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+        try:
+            font_id = QFontDatabase.addApplicationFont(":/fonts/Roboto-Regular.ttf")
+            if font_id == -1:
+                raise RuntimeError("custom font not loaded")
+            family = QFontDatabase.applicationFontFamilies(font_id)[0]
+            app.setFont(QFont(family, 10))
+            print(f"Loaded custom font: {family}")
+        except Exception:  # pragma: no cover – visual
+            print("Falling back to system font")
+            _set_fallback_font(app)
+
+        # Check for skip auth argument (for debugging) or if running as executable
+        skip_auth = '--skip-auth' in sys.argv or getattr(sys, 'frozen', False)
+        
+        if skip_auth:
+            print("Skipping authentication (executable mode or debug)")
+            user = "executable_user"
+        else:
+            # Show authentication dialog before opening the dashboard
+            try:
+                user = authenticate_user()
+                if not user:
+                    # User cancelled or authentication failed
+                    print("Authentication cancelled or failed")
+                    sys.exit(0)
+            except Exception as e:
+                print(f"Authentication error: {e}")
+                print("Falling back to no-auth mode")
+                user = "fallback_user"
+
+        print(f"User authenticated: {user}")
+        window = MainWindow()
+        window.show()
+        print("Application started successfully")
+        sys.exit(app.exec())
+    except Exception as e:
+        print(f"Critical error: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        input("Press Enter to exit...")  # Keep console open to see error
+        sys.exit(1)
