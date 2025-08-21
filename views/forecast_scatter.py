@@ -8,9 +8,13 @@ import numpy as np
 from io import StringIO
 import random
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
+    QFrame, QGraphicsDropShadowEffect
+)
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtGui import QColor
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
@@ -191,56 +195,170 @@ class ForecastScatterView(QWidget):
         self.setup_ui()
         
     def setup_ui(self):
+        # Root style – modern & clean
+        self.setObjectName("forecastRoot")
+        self.setStyleSheet("""
+            #forecastRoot {
+                background:
+                  radial-gradient(420px 320px at 8% 10%, #E7EDFF 0%, transparent 60%),
+                  radial-gradient(480px 360px at 92% 90%, #F0F7FF 0%, transparent 60%),
+                  qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #F8FAFD, stop:1 #EEF3FF);
+                font-family: "Inter","Segoe UI", Arial, sans-serif;
+                color: #0F172A;
+            }
+            QLabel { letter-spacing: .2px; }
+            QComboBox {
+                background: #FFFFFF;
+                border: 1px solid #D8E3F5;
+                border-radius: 10px;
+                padding: 8px 12px;
+                min-height: 36px;
+                font-weight: 600;
+            }
+            QComboBox:hover { border-color: #C9D7F0; }
+            QComboBox:focus {
+                border: 2px solid #2563EB;
+                padding: 7px 11px;  /* keep size when focused */
+            }
+            QComboBox::drop-down {
+                width: 28px; border: 0; 
+            }
+            QComboBox QAbstractItemView {
+                background: #FFFFFF;
+                border: 1px solid #D8E3F5;
+                selection-background-color: #EEF4FF;
+                outline: 0;
+            }
+            QPushButton.primary {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2563EB, stop:1 #1E40AF);
+                color: #FFFFFF;
+                border: none;
+                border-radius: 22px;
+                padding: 10px 18px;
+                font-weight: 800;
+                letter-spacing: .2px;
+            }
+            QPushButton.primary:hover {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2E6BFF, stop:1 #2444B3);
+            }
+            QPushButton.primary:disabled {
+                background: #94A3B8; color: #E5E7EB;
+            }
+            #titleLabel {
+                font-size: 18pt; font-weight: 800; color: #0F172A;
+            }
+            #subtitleTag {
+                background: #F1F5FF; color: #1D4ED8; 
+                border: 1px solid #D8E3F5; border-radius: 999px;
+                padding: 4px 10px; font-weight: 700; font-size: 10.5pt;
+            }
+            #metricsLabel {
+                background: #F8FAFF; border: 1px solid #E6EAF1;
+                border-radius: 12px; padding: 10px 12px; color: #334155;
+            }
+            #statusLabel {
+                color: #475569; font-size: 10.5pt;
+            }
+            QFrame.card {
+                background: #FFFFFF;
+                border: 1px solid #E6EAF1;
+                border-radius: 16px;
+            }
+        """)
+
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        
-        # Title
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        # Title + accent
+        title_wrap = QVBoxLayout()
         title = QLabel("Explore the Future (LSTM)")
-        title.setStyleSheet("font-size: 18pt; font-weight: bold;")
-        layout.addWidget(title)
-        
-        # Controls
+        title.setObjectName("titleLabel")
+        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        title_wrap.addWidget(title)
+
+        accent = QFrame()
+        accent.setFixedHeight(3)
+        accent.setStyleSheet("""
+            QFrame { 
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2563EB, stop:1 #5B7CFF);
+                border-radius: 2px;
+            }""")
+        title_wrap.addWidget(accent)
+        layout.addLayout(title_wrap)
+
+        # Controls card
+        controls_card = QFrame(objectName="controlsCard")
+        controls_card.setProperty("class", "card")
+        controls_layout_outer = QHBoxLayout(controls_card)
+        controls_layout_outer.setContentsMargins(12, 12, 12, 12)
+        controls_layout_outer.setSpacing(10)
+
+        # Soft shadow
+        shadow1 = QGraphicsDropShadowEffect(controls_card)
+        shadow1.setBlurRadius(18)
+        shadow1.setOffset(0, 6)
+        shadow1.setColor(QColor(2, 6, 23, 22))
+        controls_card.setGraphicsEffect(shadow1)
+
         control_layout = QHBoxLayout()
-        
+        control_layout.setSpacing(10)
+
         self.target_combo = QComboBox()
         self.target_combo.setMinimumWidth(200)
-        control_layout.addWidget(QLabel("Target Column:"))
-        control_layout.addWidget(self.target_combo)
-        
+
+        combo_block = QHBoxLayout()
+        combo_block.addWidget(QLabel("Target Column:"))
+        combo_block.addWidget(self.target_combo)
+        control_layout.addLayout(combo_block)
+
         self.forecast_btn = QPushButton("Run Forecast")
+        self.forecast_btn.setObjectName("runBtn")
+        self.forecast_btn.setProperty("class", "primary")
         self.forecast_btn.clicked.connect(self.run_forecast)
-        self.forecast_btn.setStyleSheet(
-            "QPushButton {"
-            "   background-color: #2e7d32;"
-            "   color: white;"
-            "   padding: 8px 16px;"
-            "   font-weight: bold;"
-            "   border-radius: 4px;"
-            "}"
-            "QPushButton:hover { background-color: #1b5e20; }"
-        )
         control_layout.addWidget(self.forecast_btn)
         control_layout.addStretch()
-        
-        layout.addLayout(control_layout)
-        
-        # Plotly web view for visualization
+
+        controls_layout_outer.addLayout(control_layout)
+        layout.addWidget(controls_card)
+
+        # Chart card
+        chart_card = QFrame(objectName="chartCard")
+        chart_card.setProperty("class", "card")
+        chart_layout = QVBoxLayout(chart_card)
+        chart_layout.setContentsMargins(12, 12, 12, 12)
+        chart_layout.setSpacing(8)
+
+        shadow2 = QGraphicsDropShadowEffect(chart_card)
+        shadow2.setBlurRadius(22)
+        shadow2.setOffset(0, 8)
+        shadow2.setColor(QColor(2, 6, 23, 18))
+        chart_card.setGraphicsEffect(shadow2)
+
         self.plot_view = QWebEngineView()
-        self.plot_view.setMinimumHeight(500)
-        layout.addWidget(self.plot_view)
-        
-        # Metrics display
+        self.plot_view.setMinimumHeight(520)
+        self.plot_view.setStyleSheet("""
+            QWebEngineView {
+                background: #FFFFFF;
+                border: 1px solid #E6EAF1;
+                border-radius: 12px;
+            }
+        """)
+        chart_layout.addWidget(self.plot_view)
+        layout.addWidget(chart_card)
+
+        # Metrics & status
         self.metrics_label = QLabel("Metrics will appear here after forecast")
-        self.metrics_label.setStyleSheet("font-size: 12pt; margin-top: 10px;")
+        self.metrics_label.setObjectName("metricsLabel")
+        self.metrics_label.setWordWrap(True)
         layout.addWidget(self.metrics_label)
-        
-        # Status message
+
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: #666; font-size: 10pt;")
+        self.status_label.setObjectName("statusLabel")
         layout.addWidget(self.status_label)
-        
+
         layout.addStretch()
-        
+
         # Initialize target options
         self.refresh_target_options()
     
@@ -326,7 +444,7 @@ class ForecastScatterView(QWidget):
             legend_title="Legend",
             hovermode="x unified",
             template="plotly_white",
-            height=500
+            height=520
         )
         
         # Display plot
