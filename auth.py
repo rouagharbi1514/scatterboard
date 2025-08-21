@@ -1,514 +1,437 @@
-#!/usr/bin/env python3
-"""
-Modern Authentication Module for Hotel Dashboard
-================================================
-
-Provides secure login functionality with a futuristic UI design.
-Licensed software rental model with enhanced visual presentation.
-"""
+##!/usr/bin/env python3
+# Design-only V5: no SSO / no Forgot, Aurora Night v2 background,
+# glass card with gradient border, XL inputs, accessible focus, subtle animations.
 
 import hashlib
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from typing import Optional, Tuple
+
+from PySide6.QtCore import Qt, QEasingCurve, QPropertyAnimation
+from PySide6.QtGui import QPixmap, QColor, QPalette, QFont
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QFrame, QApplication, QGraphicsDropShadowEffect
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QFrame, QGraphicsDropShadowEffect, QWidget, QGraphicsOpacityEffect
 )
-from PySide6.QtGui import QPixmap, QColor, QLinearGradient, QPainter, QPalette, QBrush
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# COMPANY LICENSE CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
-# Set these values when deploying to each hotel client
-
-COMPANY_NAME = "Plaza"  # Hotel/Company name
-LICENSE_USERNAME = "hamza"     # Username provided to hotel
-LICENSE_PASSWORD = "ha055923"     # Password provided to hotel  
-LICENSE_START_DATE = "2025-08-09"   # License start date (YYYY-MM-DD)
-LICENSE_DURATION_DAYS = 365         # License duration in days (365 = 1 year)
-
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Licence (inchangée)
+COMPANY_NAME = "Plaza"
+LICENSE_USERNAME = "hamza"
+LICENSE_PASSWORD = "ha055923"
+LICENSE_START_DATE = "2025-08-09"
+LICENSE_DURATION_DAYS = 365
 
 
 class LicenseManager:
-    """Manages company-controlled software licensing for hotel dashboard rental."""
-    
     def __init__(self):
-        self.company_name = COMPANY_NAME
         self.username = LICENSE_USERNAME
-        self.password_hash = self._hash_password(LICENSE_PASSWORD)
+        self.password_hash = hashlib.sha256(LICENSE_PASSWORD.encode()).hexdigest()
         self.start_date = datetime.strptime(LICENSE_START_DATE, "%Y-%m-%d")
         self.end_date = self.start_date + timedelta(days=LICENSE_DURATION_DAYS)
-    
-    def _hash_password(self, password: str) -> str:
-        """Hash password using SHA-256."""
-        return hashlib.sha256(password.encode()).hexdigest()
-    
-    def authenticate(self, username: str, password: str) -> tuple[bool, str]:
-        """
-        Authenticate user credentials against company license.
-        Returns (success, message)
-        """
-        # Check if username matches
-        if username != self.username:
+
+    def authenticate(self, u: str, p: str) -> Tuple[bool, str]:
+        if u != self.username:
             return False, "Invalid username or password"
-        
-        # Check if password is correct
-        if self._hash_password(password) != self.password_hash:
+        if hashlib.sha256(p.encode()).hexdigest() != self.password_hash:
             return False, "Invalid username or password"
-        
-        # Check if license is still valid
-        current_date = datetime.now()
-        if current_date < self.start_date:
+        now = datetime.now()
+        if now < self.start_date:
             return False, "License not yet active. Please contact support."
-        
-        if current_date > self.end_date:
+        if now > self.end_date:
             return False, "License has expired. Please contact support to renew."
-        
         return True, "Login successful"
-    
-    def get_license_info(self) -> Dict[str, Any]:
-        """Get license information including remaining days."""
-        current_date = datetime.now()
-        days_remaining = (self.end_date - current_date).days
-        days_used = (current_date - self.start_date).days
-        
-        return {
-            "company_name": self.company_name,
-            "username": self.username,
-            "start_date": self.start_date.strftime("%Y-%m-%d"),
-            "end_date": self.end_date.strftime("%Y-%m-%d"),
-            "days_remaining": max(0, days_remaining),
-            "days_used": max(0, days_used),
-            "total_days": LICENSE_DURATION_DAYS,
-            "is_active": self.start_date <= current_date <= self.end_date,
-            "is_expired": current_date > self.end_date
-        }
 
 
 class LoginDialog(QDialog):
-    """Modern futuristic login dialog for hotel dashboard authentication."""
-    
-    def __init__(self, parent=None):
+    """
+    UI modernisée V5 :
+      • Fond “Aurora Night v2” (dégradés profonds + vignette douce)
+      • Carte glass avec bordure dégradée premium
+      • Zone Sign in épurée (sans SSO ni Forgot)
+      • Inputs XL, focus ring accessible, animations subtiles
+    """
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.license_manager = LicenseManager()
-        self.authenticated_user = None
-        self.setup_ui()
-        self.apply_stylesheet()
-        self.setup_animations()
-    
-    def setup_ui(self):
-        """Setup the login dialog UI with modern design."""
-        self.setWindowTitle("Hotel Analytics - Licensed Login")
-        self.setMinimumSize(600, 700)
-        self.resize(800, 800)
-        self.setModal(True)
+        self.lic = LicenseManager()
+        self.authenticated_user: Optional[str] = None
+        self._build_ui()
+        self._apply_qss()
+        self._add_shadows()
+        self._animate_title_underline()
+        self._fade_in_card()
+
+    # ── UI
+    def _build_ui(self) -> None:
+        self.setWindowTitle("Hotel Analytics – Login")
         self.setObjectName("loginDialog")
-        
-        # Set background image
-        self.setAutoFillBackground(True)
-        palette = self.palette()
-        
-        # Load background image
-        background_pixmap = QPixmap("/Users/hamzamathlouthi/Desktop/Done/hotel-dashboard/background.jpg")
-        if not background_pixmap.isNull():
-            # Scale the background image to fit the dialog
-            scaled_background = background_pixmap.scaled(
-                self.size(), 
-                Qt.KeepAspectRatioByExpanding, 
-                Qt.SmoothTransformation
-            )
-            palette.setBrush(QPalette.Window, QBrush(scaled_background))
+        self.setMinimumSize(900, 600)
+        self.resize(1040, 640)
+        self.setModal(True)
+
+        pal = self.palette()
+        pal.setColor(QPalette.Window, QColor("#0B1220"))
+        self.setPalette(pal)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 24, 24, 24)
+
+        # — Gradient border wrapper (effet bordure moderne)
+        self.cardWrap = QFrame(objectName="cardWrap")
+        wrapLay = QVBoxLayout(self.cardWrap)
+        wrapLay.setContentsMargins(1, 1, 1, 1)
+        wrapLay.setSpacing(0)
+        root.addWidget(self.cardWrap, 0, Qt.AlignHCenter | Qt.AlignVCenter)
+
+        # Carte principale
+        self.card = QFrame(objectName="card")
+        self.card.setMaximumWidth(1100)
+        wrapLay.addWidget(self.card)
+
+        row = QHBoxLayout(self.card)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+
+        # ─ Pane gauche (hero / branding)
+        left = QFrame(objectName="leftPane")
+        left.setMinimumWidth(360)
+        l = QVBoxLayout(left)
+        l.setContentsMargins(32, 36, 32, 36)
+        l.setSpacing(12)
+
+        circle = QLabel(objectName="logoCircle")
+        circle.setFixedSize(92, 92)
+        circle.setAlignment(Qt.AlignCenter)
+        pix = QPixmap(":/icons/app-icon.png")
+        if not pix.isNull():
+            circle.setPixmap(pix.scaled(58, 58, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
-            # Fallback to gradient if image can't be loaded
-            gradient = QLinearGradient(0, 0, 0, self.height())
-            gradient.setColorAt(0, QColor("#0c1e25"))
-            gradient.setColorAt(1, QColor("#1a3a50"))
-            palette.setBrush(QPalette.Window, QBrush(gradient))
-        
-        self.setPalette(palette)
-        
-        # Main layout
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(30)
-        
-        # Add top spacer
-        layout.addStretch(1)
-        
-        # Header section
-        header_frame = QFrame()
-        header_frame.setObjectName("headerFrame")
-        header_layout = QVBoxLayout(header_frame)
-        header_layout.setSpacing(20)
-        header_layout.setContentsMargins(30, 30, 30, 30)
-        
-        # Logo image instead of hotel emoji
-        icon_label = QLabel()
-        icon_label.setObjectName("iconLabel")
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setFixedSize(120, 120)
-        
-        # Load and set the logo image
-        pixmap = QPixmap("/Users/hamzamathlouthi/Desktop/Done/hotel-dashboard/apple-touch-icon.png")
-        if not pixmap.isNull():
-            # Scale the image to fit the label while maintaining aspect ratio
-            scaled_pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            icon_label.setPixmap(scaled_pixmap)
-        else:
-            # Fallback text if image can't be loaded
-            icon_label.setText("LOGO")
-            icon_label.setStyleSheet("color: white; font-size: 24px; font-weight: bold;")
-        
-        header_layout.addWidget(icon_label)
-        
-        # Title with glow effect
-        title = QLabel("HOTEL ANALYTICS")
-        title.setObjectName("titleLabel")
-        title.setAlignment(Qt.AlignCenter)
-        header_layout.addWidget(title)
-        
-        # Subtitle
-        subtitle = QLabel(f"Licensed to: {self.license_manager.company_name}")
-        subtitle.setObjectName("subtitleLabel")
-        subtitle.setAlignment(Qt.AlignCenter)
-        header_layout.addWidget(subtitle)
-        
-        # Days left for license (replacing the license info fields)
-        info = self.license_manager.get_license_info()
-        days_left_label = QLabel(f"<b>Days Left:</b> {info['days_remaining']} days")
-        days_left_label.setObjectName("licenseLabel")
-        days_left_label.setAlignment(Qt.AlignCenter)
-        header_layout.addWidget(days_left_label)
-        
-        layout.addWidget(header_frame)
-        
-        # Add middle spacer
-        layout.addStretch(1)
-        
-        # Form section with floating effect
-        form_frame = QFrame()
-        form_frame.setObjectName("formFrame")
-        form_layout = QVBoxLayout(form_frame)
-        form_layout.setContentsMargins(40, 40, 40, 40)
-        form_layout.setSpacing(30)
-        
-        # Username field (without emoji)
-        username_container = QFrame()
-        username_container.setObjectName("inputContainer")
-        username_layout = QHBoxLayout(username_container)
-        username_layout.setContentsMargins(20, 0, 20, 0)
-        
-        # Removed user emoji - no icon needed
-        
-        self.username_input = QLineEdit()
-        self.username_input.setObjectName("inputField")
-        self.username_input.setPlaceholderText("Enter your username")
-        self.username_input.setMinimumHeight(60)
-        self.username_input.setAlignment(Qt.AlignCenter)
-        username_layout.addWidget(self.username_input)
-        
-        form_layout.addWidget(username_container)
-        
-        # Password field (without lock emoji)
-        password_container = QFrame()
-        password_container.setObjectName("inputContainer")
-        password_layout = QHBoxLayout(password_container)
-        password_layout.setContentsMargins(20, 0, 20, 0)
-        
-        # Removed lock emoji - no icon needed
-        
-        self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Enter your password")
+            circle.setText("HD")
+        l.addWidget(circle, 0, Qt.AlignLeft)
+
+        brandTop = QLabel("Hotel Dashboard", objectName="brandTop")
+        brandTop.setWordWrap(True)
+        l.addWidget(brandTop)
+
+        brandSub = QLabel("Premium Analytics • Plaza", objectName="brandSub")
+        brandSub.setWordWrap(True)
+        l.addWidget(brandSub)
+
+        bp1 = QLabel("Real-time KPIs & RevPAR insights", objectName="bullet")
+        bp2 = QLabel("Secure access • Enterprise-grade", objectName="bullet")
+        l.addSpacing(6)
+        l.addWidget(bp1)
+        l.addWidget(bp2)
+        l.addStretch(1)
+
+        # Ruban séparateur
+        sep = QFrame(objectName="separator")
+        sep.setFixedWidth(24)
+
+        # ─ Pane droite (Sign in épurée)
+        right = QFrame(objectName="rightPane")
+        r = QVBoxLayout(right)
+        r.setContentsMargins(52, 42, 52, 42)
+        r.setSpacing(16)
+
+        form = QFrame(objectName="form")
+        form.setMaximumWidth(520)
+        f = QVBoxLayout(form)
+        f.setContentsMargins(0, 0, 0, 0)
+        f.setSpacing(12)
+
+        headerRow = QVBoxLayout()
+        title = QLabel("Sign in", objectName="formTitle")
+        title.setAlignment(Qt.AlignLeft)
+        self.accent = QFrame(objectName="accent")
+        self.accent.setFixedHeight(3)
+        self.accent.setMaximumWidth(64)
+        headerRow.addWidget(title)
+        headerRow.addWidget(self.accent)
+        f.addLayout(headerRow)
+
+        # Champs XL
+        ulabel = QLabel("Username", objectName="fieldLabel")
+        f.addWidget(ulabel)
+        self.username_input = QLineEdit(placeholderText="Enter your username")
+        self.username_input.setObjectName("lineEdit")
+        self.username_input.setMinimumHeight(50)
+        self.username_input.setClearButtonEnabled(True)
+        f.addWidget(self.username_input)
+
+        plabel = QLabel("Password", objectName="fieldLabel")
+        f.addWidget(plabel)
+        pwRow = QHBoxLayout()
+        pwRow.setSpacing(8)
+        self.password_input = QLineEdit(placeholderText="Enter your password")
+        self.password_input.setObjectName("lineEdit")
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setObjectName("inputField")
-        self.password_input.setMinimumHeight(60)
-        self.password_input.setAlignment(Qt.AlignCenter)
-        
-        # Show/Hide password toggle button
-        self.toggle_password_btn = QPushButton("👁")
-        self.toggle_password_btn.setObjectName("togglePasswordButton")
-        self.toggle_password_btn.setFixedSize(50, 50)
-        self.toggle_password_btn.clicked.connect(self.toggle_password_visibility)
-        
-        password_layout.addWidget(self.password_input)
-        password_layout.addWidget(self.toggle_password_btn)
-        
-        form_layout.addWidget(password_container)
-        
-        # Login button with animation
-        self.login_button = QPushButton("ACCESS DASHBOARD")
-        self.login_button.setObjectName("loginButton")
-        self.login_button.setMinimumHeight(70)
-        self.login_button.clicked.connect(self.handle_login)
-        
-        form_layout.addWidget(self.login_button)
-        layout.addWidget(form_frame)
-        
-        # Status label
-        self.status_label = QLabel("")
-        self.status_label.setObjectName("statusLabel")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.status_label)
-        
-        # Add bottom spacer
-        layout.addStretch(1)
-        
-        # Connect Enter key to login
-        self.username_input.returnPressed.connect(self.handle_login)
-        self.password_input.returnPressed.connect(self.handle_login)
-        
-        # Focus on username field
+        self.password_input.setMinimumHeight(50)
+        self.password_input.setClearButtonEnabled(True)
+        self.eye = QPushButton("Show", objectName="eyeBtn")
+        self.eye.setCursor(Qt.PointingHandCursor)
+        self.eye.setFixedSize(72, 44)
+        self.eye.clicked.connect(self._toggle_pw)
+        pwRow.addWidget(self.password_input, 1)
+        pwRow.addWidget(self.eye)
+        f.addLayout(pwRow)
+
+        # CTA principal
+        self.login_button = QPushButton("Sign In", objectName="primaryBtn")
+        self.login_button.setCursor(Qt.PointingHandCursor)
+        self.login_button.setMinimumHeight(54)
+        self.login_button.clicked.connect(self._handle_login)
+        f.addWidget(self.login_button)
+
+        # Hint & status
+        hint = QLabel("Access is restricted to authorized personnel.", objectName="hint")
+        f.addWidget(hint)
+        self.status = QLabel("", objectName="status")
+        self.status.setAlignment(Qt.AlignLeft)
+        self.status.setVisible(False)
+        f.addWidget(self.status)
+
+        r.addWidget(form, 0, Qt.AlignLeft | Qt.AlignTop)
+        row.addWidget(left)
+        row.addWidget(sep)
+        row.addWidget(right, 1)
+
+        # UX
+        self.username_input.returnPressed.connect(self._handle_login)
+        self.password_input.returnPressed.connect(self._handle_login)
+        self.setTabOrder(self.username_input, self.password_input)
+        self.setTabOrder(self.password_input, self.login_button)
         self.username_input.setFocus()
-        
-        # Add shadow effects
-        self.add_shadow_effects()
-    
-    def add_shadow_effects(self):
-        """Add modern holographic shadow effects to UI elements."""
-        # Header shadow
-        header_shadow = QGraphicsDropShadowEffect()
-        header_shadow.setBlurRadius(30)
-        header_shadow.setXOffset(0)
-        header_shadow.setYOffset(5)
-        header_shadow.setColor(QColor(64, 164, 223, 150))
-        self.findChild(QFrame, "headerFrame").setGraphicsEffect(header_shadow)
-        
-        # Form shadow
-        form_shadow = QGraphicsDropShadowEffect()
-        form_shadow.setBlurRadius(30)
-        form_shadow.setXOffset(0)
-        form_shadow.setYOffset(5)
-        form_shadow.setColor(QColor(64, 164, 223, 150))
-        self.findChild(QFrame, "formFrame").setGraphicsEffect(form_shadow)
-        
-        # Button shadow
-        button_shadow = QGraphicsDropShadowEffect()
-        button_shadow.setBlurRadius(15)
-        button_shadow.setXOffset(0)
-        button_shadow.setYOffset(5)
-        button_shadow.setColor(QColor(64, 164, 223, 200))
-        self.login_button.setGraphicsEffect(button_shadow)
-    
-    def setup_animations(self):
-        """Setup subtle animations for UI elements."""
-        # Button animation
-        self.button_anim = QPropertyAnimation(self.login_button, b"geometry")
-        self.button_anim.setDuration(300)
-        self.button_anim.setEasingCurve(QEasingCurve.OutBack)
-    
-    def animate_button(self):
-        """Animate the login button on click."""
-        orig_rect = self.login_button.geometry()
-        target_rect = orig_rect.adjusted(-5, -5, 5, 5)
-        
-        self.button_anim.setStartValue(orig_rect)
-        self.button_anim.setEndValue(target_rect)
-        self.button_anim.start()
-    
-    def toggle_password_visibility(self):
-        """Toggle password visibility with animation."""
-        # Animate the toggle button
-        anim = QPropertyAnimation(self.toggle_password_btn, b"geometry")
-        anim.setDuration(200)
-        anim.setStartValue(self.toggle_password_btn.geometry().adjusted(-2, -2, 2, 2))
-        anim.setEndValue(self.toggle_password_btn.geometry())
-        anim.start()
-        
-        if self.password_input.echoMode() == QLineEdit.Password:
-            self.password_input.setEchoMode(QLineEdit.Normal)
-            self.toggle_password_btn.setText("🙈")
-        else:
-            self.password_input.setEchoMode(QLineEdit.Password)
-            self.toggle_password_btn.setText("👁")
-    
-    def handle_login(self):
-        """Handle login button click."""
-        # Animate button
-        self.animate_button()
-        
-        username = self.username_input.text().strip()
-        password = self.password_input.text()
-        
-        if not username or not password:
-            self.status_label.setText("Please enter both username and password.")
-            return
-        
-        # Clear previous status
-        self.status_label.setText("")
-        
-        # Authenticate using LicenseManager
-        license_manager = LicenseManager()
-        is_valid, message = license_manager.authenticate(username, password)
-        
-        if is_valid:
-            self.authenticated_user = username
-            self.accept()  # Close dialog with success
-        else:
-            self.status_label.setText(message)
-            # Clear password field for security
-            self.password_input.clear()
-            self.password_input.setFocus()
-    
-    def apply_stylesheet(self):
-        """Apply modern futuristic theme stylesheet."""
-        self.setStyleSheet("""
+
+        # Pop du CTA
+        self.btn_anim = QPropertyAnimation(self.login_button, b"geometry", self)
+        self.btn_anim.setDuration(220)
+        self.btn_anim.setEasingCurve(QEasingCurve.OutCubic)
+
+    # ── Styles
+    def _apply_qss(self) -> None:
+        self.setFont(QFont("Manrope", 10))
+        self.setStyleSheet(r"""
+            /* --- Background Aurora Night v2 + vignette --- */
             QDialog#loginDialog {
-                background: transparent;
-                border: none;
+                background:
+                  qradialgradient(cx:0.12, cy:0.10, radius:0.62, fx:0.12, fy:0.10,
+                                  stop:0 #12275A, stop:1 transparent),
+                  qradialgradient(cx:0.88, cy:0.90, radius:0.72, fx:0.88, fy:0.90,
+                                  stop:0 #0E1F44, stop:1 transparent),
+                  qconicalgradient(cx:0.62, cy:0.38, angle:210,
+                                  stop:0 #0B1220, stop:0.35 #0D1630, stop:0.7 #0B1327, stop:1 #0B1220);
             }
-            
-            /* Header section */
-            #headerFrame {
-                background: rgba(10, 30, 50, 0.8);
-                border-radius: 25px;
-                border: 2px solid rgba(64, 164, 223, 0.5);
-                backdrop-filter: blur(10px);
+            * { font-family:'Manrope','Inter','Segoe UI',Arial; }
+
+            /* Gradient border wrapper */
+            #cardWrap {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+                    stop:0 #4F7BFF, stop:0.5 #7EA6FF, stop:1 #C2D1FF);
+                border-radius: 28px;
+                padding: 0px;
             }
-            
-            #iconLabel {
-                background: qradialgradient(
-                    cx:0.5, cy:0.5, radius: 0.5, fx:0.5, fy:0.5,
-                    stop:0 rgba(64, 164, 223, 0.4),
-                    stop:1 rgba(64, 164, 223, 0.1)
-                );
-                color: #40a4df;
-                font-size: 60px;
-                border-radius: 60px;
-                border: 2px solid rgba(64, 164, 223, 0.5);
+
+            /* Carte glass */
+            #card {
+                background: rgba(255,255,255,0.90);
+                border: 1px solid rgba(180,195,230,0.30);
+                border-radius: 27px;
             }
-            
-            #titleLabel {
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 36px;
-                font-weight: 800;
-                color: #ffffff;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-                margin-top: 15px;
-                text-shadow: 
-                    0 0 10px rgba(64, 164, 223, 0.8),
-                    0 0 20px rgba(64, 164, 223, 0.6),
-                    0 0 30px rgba(64, 164, 223, 0.4);
+
+            /* Pane gauche – hero sombre premium */
+            #leftPane {
+                background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                    stop:0 #162550, stop:1 #1F3D8A);
+                border-top-left-radius: 27px;
+                border-bottom-left-radius: 27px;
             }
-            
-            #subtitleLabel {
-                font-size: 22px;
-                color: #7fdbca;
-                margin-top: 5px;
-                font-weight: 600;
-                letter-spacing: 1px;
-                text-shadow: 0 0 10px rgba(127, 219, 202, 0.5);
+            #logoCircle {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+                    stop:0 #FFFFFF, stop:1 #F2F6FF);
+                border:1px solid #E2E9F7;
+                border-radius: 46px;
+                color:#2242A4;
+                font:800 18px 'Manrope';
             }
-            
-            #licenseLabel {
-                color: #ffffff;
-                font-size: 16px;
-                font-weight: 500;
-                background: rgba(20, 50, 80, 0.6);
-                border-radius: 10px;
-                padding: 10px;
-                text-shadow: 0 0 5px rgba(64, 164, 223, 0.5);
+            #brandTop { color:#FFFFFF; font:800 24px 'Manrope'; letter-spacing:.2px; margin-top:12px; }
+            #brandSub { color:#D6E7FF; font:600 13px 'Manrope'; }
+            #bullet {
+                color:#EAF1FF; font:600 12.5px 'Manrope';
+                background: rgba(255,255,255,0.08);
+                border:1px solid rgba(255,255,255,0.14);
+                padding:8px 10px; border-radius:12px; margin-top:6px;
             }
-            
-            /* Form section */
-            #formFrame {
-                background: rgba(15, 40, 60, 0.7);
-                border-radius: 25px;
-                border: 2px solid rgba(64, 164, 223, 0.4);
-                backdrop-filter: blur(10px);
+
+            /* Séparateur ruban */
+            #separator {
+                background:#FFFFFF;
+                border-left:1px solid #E5ECF9;
+                border-right:1px solid #E5ECF9;
+                border-top-right-radius:27px;
+                border-bottom-right-radius:27px;
             }
-            
-            #inputContainer {
-                background: rgba(10, 30, 50, 0.6);
-                border-radius: 15px;
-                border: 1px solid rgba(64, 164, 223, 0.3);
+
+            /* Pane droit translucide */
+            #rightPane {
+                background: rgba(255,255,255,0.50);
+                border-top-right-radius:27px;
+                border-bottom-right-radius:27px;
             }
-            
-            #inputField {
-                background: transparent;
-                color: #ffffff;
-                font-size: 20px;
-                font-weight: 500;
-                border: none;
-                padding: 15px;
-                selection-background-color: #40a4df;
+
+            /* Titre & accent animé */
+            #formTitle { color:#0F172A; font:800 26px 'Manrope'; margin-bottom:2px; }
+            #accent {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 #2563EB, stop:1 #6A8BFF);
+                border-radius: 2px;
             }
-            
-            #inputField::placeholder {
-                color: #a0c0d0;
-                font-size: 18px;
-                text-align: center;
+
+            /* Labels */
+            #fieldLabel { color:#334155; font:700 12.5px 'Manrope'; margin-top:4px; }
+
+            /* Inputs XL + focus ring accessible */
+            #lineEdit {
+                background:#FFFFFF;
+                border:1px solid #D4E0F4;
+                border-radius:14px;
+                padding:12px 14px;
+                font:600 14px 'Manrope';
+                color:#0F172A;
+                selection-background-color:#2563EB;
+                selection-color:#FFFFFF;
             }
-            
-            #inputIcon {
-                color: #40a4df;
-                font-size: 30px;
-                padding: 0 15px;
+            #lineEdit::placeholder { color:#8FA1B3; font-weight:500; }
+            #lineEdit:hover { border-color:#C6D4EF; }
+            #lineEdit:focus {
+                border:2px solid #2563EB;
+                padding:11px 13px;
+                box-shadow: 0 0 0 3px rgba(37,99,235,.14);
             }
-            
-            #togglePasswordButton {
-                background: rgba(64, 164, 223, 0.2);
-                color: #7fdbca;
-                font-size: 24px;
-                border: 2px solid rgba(64, 164, 223, 0.4);
-                border-radius: 10px;
-                padding: 10px;
+
+            /* Show/Hide */
+            #eyeBtn {
+                background:#F4F7FC;
+                border:1px solid #E3EAF6;
+                border-radius:12px;
+                color:#3E4C61;
+                font:700 12.5px 'Manrope';
             }
-            
-            #togglePasswordButton:hover {
-                background: rgba(64, 164, 223, 0.4);
-                color: #ffffff;
-                border: 2px solid rgba(64, 164, 223, 0.6);
+            #eyeBtn:hover  { background:#EEF2FB; }
+            #eyeBtn:pressed{ background:#E8EDFA; }
+
+            /* CTA principal (pill) */
+            #primaryBtn {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 #2563EB, stop:1 #1E40AF);
+                color:#FFFFFF;
+                border:none;
+                border-radius:28px;
+                font:800 15px 'Manrope';
+                padding:14px 24px;
+                margin-top:8px;
+                letter-spacing:.2px;
             }
-            
-            /* Login button */
-            #loginButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #40a4df, stop:1 #2e86c1);
-                color: #ffffff;
-                border: none;
-                border-radius: 15px;
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-weight: 700;
-                font-size: 20px;
-                text-transform: uppercase;
-                letter-spacing: 2px;
-                padding: 20px;
-                transition: all 0.3s ease;
+            #primaryBtn:hover {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 #2E6BFF, stop:1 #2444B3);
+                box-shadow: 0 14px 28px rgba(37,99,235,.22);
             }
-            
-            #loginButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #50b4ef, stop:1 #3e96d1);
-                transform: translateY(-3px);
+            #primaryBtn:pressed { background:#1B3A97; }
+
+            /* Hint & status chips */
+            #hint {
+                color:#5B6B83;
+                font:600 12px 'Manrope';
+                margin-top:2px;
             }
-            
-            #loginButton:pressed {
-                transform: translateY(1px);
-            }
-            
-            /* Status label */
-            #statusLabel {
-                font-size: 16px;
-                font-weight: 600;
-                padding: 15px;
-                border-radius: 10px;
-                background: rgba(255, 107, 107, 0.3);
-                color: #ffffff;
-                text-shadow: 0 0 5px rgba(255, 107, 107, 0.8);
+            #status {
+                color:#B91C1C;
+                background:rgba(185,28,28,0.06);
+                border:1px solid rgba(185,28,28,0.18);
+                border-radius:12px;
+                padding:8px 10px;
+                font:700 12.5px 'Manrope';
+                margin-top:8px;
             }
         """)
 
+    def _add_shadows(self) -> None:
+        sh = QGraphicsDropShadowEffect()
+        sh.setBlurRadius(40)
+        sh.setOffset(0, 22)
+        sh.setColor(QColor(10, 22, 50, 46))
+        self.card.setGraphicsEffect(sh)
+
+    def _animate_title_underline(self) -> None:
+        anim = QPropertyAnimation(self.accent, b"maximumWidth", self)
+        anim.setDuration(680)
+        anim.setStartValue(48)
+        anim.setEndValue(180)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.start()
+        self._accent_anim = anim
+
+    def _fade_in_card(self) -> None:
+        eff = QGraphicsOpacityEffect(self.cardWrap)
+        self.cardWrap.setGraphicsEffect(eff)
+        fade = QPropertyAnimation(eff, b"opacity", self)
+        fade.setDuration(460)
+        fade.setStartValue(0.0)
+        fade.setEndValue(1.0)
+        fade.setEasingCurve(QEasingCurve.OutCubic)
+        fade.start()
+        self._fade_anim = fade
+
+    # ── UX actions
+    def _toggle_pw(self) -> None:
+        if self.password_input.echoMode() == QLineEdit.Password:
+            self.password_input.setEchoMode(QLineEdit.Normal)
+            self.eye.setText("Hide")
+        else:
+            self.password_input.setEchoMode(QLineEdit.Password)
+            self.eye.setText("Show")
+
+    def _shake_card(self) -> None:
+        g = self.card.geometry()
+        anim = QPropertyAnimation(self.card, b"geometry", self)
+        anim.setDuration(260)
+        anim.setKeyValueAt(0.00, g)
+        anim.setKeyValueAt(0.25, g.adjusted(6, 0, 6, 0))
+        anim.setKeyValueAt(0.50, g.adjusted(-6, 0, -6, 0))
+        anim.setKeyValueAt(0.75, g.adjusted(3, 0, 3, 0))
+        anim.setKeyValueAt(1.00, g)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.start()
+        self._shake_anim = anim
+
+    def _handle_login(self) -> None:
+        # Pop CTA
+        g = self.login_button.geometry()
+        self.btn_anim.stop()
+        self.btn_anim.setStartValue(g)
+        self.btn_anim.setEndValue(g.adjusted(-3, -2, 3, 2))
+        self.btn_anim.finished.connect(lambda: self.login_button.setGeometry(g))
+        self.btn_anim.start()
+
+        u = self.username_input.text().strip()
+        p = self.password_input.text()
+        if not u or not p:
+            self.status.setText("Please enter both username and password.")
+            self.status.setVisible(True)
+            self._shake_card()
+            return
+
+        ok, msg = self.lic.authenticate(u, p)
+        if ok:
+            self.authenticated_user = u
+            self.accept()
+        else:
+            self.status.setText(msg)
+            self.status.setVisible(True)
+            self.password_input.clear()
+            self.password_input.setFocus()
+            self._shake_card()
+
 
 def authenticate_user() -> Optional[str]:
-    """
-    Show login dialog and return authenticated username if successful.
-    Returns None if login failed or was cancelled.
-    """
-    dialog = LoginDialog()
-    if dialog.exec() == QDialog.Accepted:
-        return dialog.authenticated_user
-    return None
+    dlg = LoginDialog()
+    return dlg.authenticated_user if dlg.exec() == QDialog.Accepted else None
