@@ -1,259 +1,269 @@
 # flake8: noqa
+# views/utils.py – Modern UI helpers (Soft-UI), safe date ops & Plotly embed
+
 import functools
-import pandas as pd  # Add this import at the top
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
-from PySide6.QtCore import Qt
+import pandas as pd
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
+from PySide6.QtCore import Qt, QSize
 from data import is_data_loaded
 
-
+# ─────────────────────────────────────────────────────────────
+# Decorator
+# ─────────────────────────────────────────────────────────────
 def data_required(view_func):
-    """Decorator to ensure data is loaded before displaying a view."""
-
+    """Ensure data is loaded before displaying a view. Shows a friendly card otherwise."""
     @functools.wraps(view_func)
     def wrapper(*args, **kwargs):
         if is_data_loaded():
-            # Data is available, proceed with the view
             return view_func(*args, **kwargs)
-        else:
-            # No data available, show message
-            return create_error_widget("Please upload data before accessing this view")
-
+        return create_error_widget("Please upload data before accessing this view")
     return wrapper
 
 
-def create_error_widget(message, details=None):
-    """Create an error widget with the given message."""
-    widget = QWidget()
-    layout = QVBoxLayout(widget)
+# ─────────────────────────────────────────────────────────────
+# Error / Empty state (Soft-UI card)
+# ─────────────────────────────────────────────────────────────
+def _soft_card(content: QWidget, title: str | None = None) -> QWidget:
+    """Wrap any widget in a soft card for consistent visual design."""
+    card = QFrame()
+    card.setObjectName("softCard")
+    lay = QVBoxLayout(card)
+    lay.setContentsMargins(16, 16, 16, 16)
+    if title:
+        h = QLabel(title)
+        h.setStyleSheet("color:#0f172a;font-size:13pt;font-weight:600;margin-bottom:8px;")
+        lay.addWidget(h)
+    lay.addWidget(content)
+    card.setStyleSheet("""
+        QFrame#softCard {
+            background: #ffffff;
+            border: 1px solid #e5e9f2;
+            border-radius: 14px;
+        }
+    """)
+    return card
 
-    error_icon = QLabel("⚠️")
-    error_icon.setStyleSheet("font-size: 48pt; color: #fbbf24;")
-    layout.addWidget(error_icon, 0, Qt.AlignCenter) # type: ignore
 
-    error_label = QLabel(message)
-    error_label.setStyleSheet("color: #ff6b6b; font-size: 14pt;")
-    layout.addWidget(error_label, 0, Qt.AlignCenter)
+def create_error_widget(message: str, details: str | None = None) -> QWidget:
+    """Create a modern, friendly error/empty-state widget."""
+    root = QWidget()
+    root_lay = QVBoxLayout(root)
+    root_lay.setContentsMargins(24, 24, 24, 24)
+    root_lay.setAlignment(Qt.AlignCenter)
+
+    card = QWidget()
+    card_lay = QVBoxLayout(card)
+    card_lay.setContentsMargins(24, 24, 24, 24)
+    card.setStyleSheet("""
+        QWidget {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                        stop:0 #ffffff, stop:1 #fafbff);
+            border: 1px solid #e5e9f2;
+            border-radius: 18px;
+        }
+    """)
+
+    # Icon + title
+    icon = QLabel("⚠️")
+    icon.setAlignment(Qt.AlignCenter)
+    icon.setStyleSheet("font-size: 40pt; margin-bottom: 8px;")
+    card_lay.addWidget(icon, 0, Qt.AlignCenter)
+
+    title = QLabel(message)
+    title.setAlignment(Qt.AlignCenter)
+    title.setStyleSheet("color:#0f172a;font-size:14pt;font-weight:700;")
+    card_lay.addWidget(title, 0, Qt.AlignCenter)
 
     if details:
-        details_label = QLabel(details)
-        details_label.setStyleSheet("color: #aaaaaa; font-size: 11pt;")
-        layout.addWidget(details_label, 0, Qt.AlignCenter)
+        sub = QLabel(details)
+        sub.setAlignment(Qt.AlignCenter)
+        sub.setWordWrap(True)
+        sub.setStyleSheet("color:#64748b;font-size:11pt;margin-top:6px;")
+        card_lay.addWidget(sub, 0, Qt.AlignCenter)
 
-    help_text = QLabel(
-        "Try uploading data with the required columns or using the demo data."
-    )
-    help_text.setStyleSheet("color: #aaaaaa; font-size: 12pt;")
-    layout.addWidget(help_text, 0, Qt.AlignCenter)
+    hint = QLabel("Try uploading your dataset (CSV/Excel) or use demo data to explore the app.")
+    hint.setAlignment(Qt.AlignCenter)
+    hint.setWordWrap(True)
+    hint.setStyleSheet("color:#64748b;font-size:11pt;margin-top:12px;")
+    card_lay.addWidget(hint, 0, Qt.AlignCenter)
 
-    # Add button to load demo data
+    # CTA row
+    cta_row = QHBoxLayout()
+    cta_row.setAlignment(Qt.AlignCenter)
+
     demo_btn = QPushButton("Load Demo Data")
-    demo_btn.setStyleSheet(
-        """
+    demo_btn.setCursor(Qt.PointingHandCursor)
+    demo_btn.setStyleSheet("""
         QPushButton {
-            background-color: #0d6efd;
+            background-color: #7aa2f7;
             color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            font-size: 12pt;
-            margin-top: 20px;
+            padding: 10px 18px;
+            border: 0;
+            border-radius: 10px;
+            font-size: 11.5pt;
+            font-weight: 600;
         }
-        QPushButton:hover {
-            background-color: #0056b3;
-        }
-    """
-    )
-
-    # Connect to load demo data function
+        QPushButton:hover { background-color: #6b8df0; }
+    """)
     demo_btn.clicked.connect(lambda: load_demo_data())
-    layout.addWidget(demo_btn, 0, Qt.AlignCenter)
+    cta_row.addWidget(demo_btn, 0, Qt.AlignCenter)
 
-    return widget
+    card_lay.addLayout(cta_row)
+    root_lay.addWidget(card, 0, Qt.AlignCenter)
+    return root
 
 
 def load_demo_data():
-    """Load demo data from the main window."""
-    # Find main window instance
+    """Ask the main window (if present) to load demo data."""
     from PySide6.QtWidgets import QApplication
-
     main_window = None
-    for widget in QApplication.topLevelWidgets():
-        if widget.objectName() == "MainWindow":
-            main_window = widget
+    for w in QApplication.topLevelWidgets():
+        if w.objectName() == "MainWindow":
+            main_window = w
             break
-
     if main_window and hasattr(main_window, "load_demo_data"):
         main_window.load_demo_data()
 
 
-# Add this helper function for safe date operations
-
-
-def safe_date_diff(end_date, start_date):
-    """Safely calculate difference between dates."""
-    import pandas as pd
-
+# ─────────────────────────────────────────────────────────────
+# Date helpers
+# ─────────────────────────────────────────────────────────────
+def safe_date_diff(end_date, start_date) -> int:
+    """Safely calculate (end - start) in days, tolerant to types."""
     try:
-        # Convert to pandas Timestamps if needed
         if not isinstance(start_date, pd.Timestamp):
             start_date = pd.Timestamp(start_date)
         if not isinstance(end_date, pd.Timestamp):
             end_date = pd.Timestamp(end_date)
-
-        # Calculate difference in days
-        diff = (end_date - start_date).days
-        return diff
+        return (end_date - start_date).days
     except Exception as e:
-        print(f"Error calculating date difference: {e}")
-        return 0  # Return 0 as fallback
+        print(f"[safe_date_diff] {e}")
+        return 0
 
 
-def filter_by_date(df, start_date, end_date, date_col="date"):
-    """Filter dataframe by date range."""
+def filter_by_date(df: pd.DataFrame, start_date, end_date, date_col: str = "date") -> pd.DataFrame:
+    """Filter DataFrame by inclusive date range (auto-convert to datetime)."""
     try:
-        import pandas as pd
-
-        # Make sure dates are datetime objects
+        if date_col not in df.columns:
+            return df
         if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
-            df[date_col] = pd.to_datetime(df[date_col])
-
-        # Convert filter dates to pandas Timestamps
+            df = df.copy()
+            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
         start_date = pd.Timestamp(start_date)
         end_date = pd.Timestamp(end_date)
-
-        # Filter the dataframe
-        return df[(df[date_col] >= start_date) & (df[date_col] <= end_date)]
+        mask = (df[date_col] >= start_date) & (df[date_col] <= end_date)
+        return df.loc[mask]
     except Exception as e:
-        print(f"Error filtering dataframe by date: {e}")
-        return df  # Return original dataframe as fallback
-
-
-# Add a safer date filtering function
-
-
-def safe_filter_by_date(df, start, end, date_col="Date"):
-    """Safely filter a dataframe by date range, handling errors gracefully."""
-    if df is None or df.empty:
+        print(f"[filter_by_date] {e}")
         return df
 
-    if date_col not in df.columns:
-        return df
 
-    # Ensure column is datetime type
-    if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
+def safe_filter_by_date(df: pd.DataFrame, start, end, date_col: str = "Date") -> pd.DataFrame:
+    """Safely filter with guard rails; returns original df on any issue."""
+    if df is None or df.empty or date_col not in df.columns:
+        return df
+    out = df.copy()
+    if not pd.api.types.is_datetime64_any_dtype(out[date_col]):
         try:
-            # Try to convert to datetime
-            df[date_col] = pd.to_datetime(df[date_col])
+            out[date_col] = pd.to_datetime(out[date_col], errors="coerce")
         except BaseException:
-            # If conversion fails, return original dataframe
             return df
-
-    mask = (df[date_col] >= start) & (df[date_col] <= end)
-    return df[mask]
-
-
-def create_canvas(figure):
-    """Create a canvas widget for a matplotlib figure."""
-    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-
-    canvas = FigureCanvasQTAgg(figure)
-    return canvas
+    mask = (out[date_col] >= pd.Timestamp(start)) & (out[date_col] <= pd.Timestamp(end))
+    return out.loc[mask]
 
 
+# ─────────────────────────────────────────────────────────────
+# Plotly embedding (modern, no temp files)
+# ─────────────────────────────────────────────────────────────
+def create_plotly_widget(fig) -> QWidget:
+    """
+    Return a QWidget with an embedded Plotly figure (fast, no temp files).
+    """
+    from PySide6.QtWebEngineWidgets import QWebEngineView
+    from PySide6.QtWebEngineCore import QWebEngineSettings
+    from PySide6.QtWidgets import QSizePolicy as QSP, QWidget  # <-- import QWidget + QSizePolicy
+
+    html = fig.to_html(include_plotlyjs="cdn", full_html=False)
+
+    view = QWebEngineView()
+    view.setHtml(html)
+    view.settings().setAttribute(
+        QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True
+    )
+
+    # ---- FIX: utiliser l'énum, pas l'instance ----
+    Policy = getattr(QSP, "Policy", QSP)  # PySide6 récent: QSP.Policy ; ancien: QSP
+    view.setSizePolicy(Policy.Expanding, Policy.Expanding)
+    view.setMinimumHeight(450)  # optionnel, pour un rendu confortable
+    # ---------------------------------------------
+
+    return view
+
+
+# ─────────────────────────────────────────────────────────────
+# KPI Tile (Soft-UI, couleurs douces)
+# ─────────────────────────────────────────────────────────────
 def kpi_tile(label: str, value: str) -> QWidget:
     """
-    Create a nice looking KPI tile with a label and value.
-
-    Args:
-        label: The name of the KPI
-        value: The formatted value to display
-
-    Returns:
-        A QWidget containing the styled KPI tile
+    Aesthetic KPI tile with soft gradient, subtle border and strong typography.
+    API kept identical: kpi_tile(label, value) -> QWidget
     """
-    from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
-    from PySide6.QtCore import Qt, QSize
-
     tile = QWidget()
-    tile.setMinimumSize(QSize(180, 100))
-    tile.setStyleSheet(
-        """
+    tile.setMinimumSize(QSize(180, 96))
+    tile.setStyleSheet("""
         QWidget {
-            background-color: #2d3748;
-            border-radius: 8px;
-            border: 1px solid #4a5568;
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                        stop:0 #ffffff, stop:1 #fafbff);
+            border: 1px solid #e5e9f2;
+            border-radius: 14px;
         }
-    """
-    )
+    """)
 
-    layout = QVBoxLayout(tile)
-    layout.setContentsMargins(10, 10, 10, 10)
+    lay = QVBoxLayout(tile)
+    lay.setContentsMargins(14, 12, 14, 12)
+    lay.setSpacing(6)
 
-    # Value
-    value_label = QLabel(value)
-    value_label.setStyleSheet(
-        """
-        font-size: 20pt;
-        font-weight: bold;
-        color: #63b3ed;
-    """
-    )
-    value_label.setAlignment(Qt.AlignCenter)
-    layout.addWidget(value_label)
+    # Value (grand)
+    v = QLabel(value)
+    v.setAlignment(Qt.AlignCenter)
+    v.setStyleSheet("font-size:22pt;font-weight:800;color:#0f172a;")
+    lay.addWidget(v)
 
-    # Label
-    name_label = QLabel(label)
-    name_label.setStyleSheet(
-        """
-        font-size: 10pt;
-        color: #e2e8f0;
-    """
-    )
-    name_label.setAlignment(Qt.AlignCenter)
-    layout.addWidget(name_label)
+    # Label (petit, doux)
+    l = QLabel(label)
+    l.setAlignment(Qt.AlignCenter)
+    l.setStyleSheet("font-size:10pt;font-weight:600;color:#64748b;")
+    lay.addWidget(l)
 
     return tile
 
 
+# ─────────────────────────────────────────────────────────────
+# Data access shim (kept for backward-compat)
+# ─────────────────────────────────────────────────────────────
 def get_df():
-    """
-    Returns the currently loaded dataframe from the data module.
-    """
+    """Return the currently loaded dataframe from the data module."""
     from data import get_dataframe
     return get_dataframe()
 
 
-def create_plotly_widget(fig):
+# ─────────────────────────────────────────────────────────────
+# Formatting helpers
+# ─────────────────────────────────────────────────────────────
+def format_currency(value, with_sign: bool = False) -> str:
     """
-    Creates a QWidget containing a Plotly figure
+    Format a number as SAR currency with compact suffixes.
+    Keeps original semantics (K/M) but with nicer spacing.
     """
-    from PySide6.QtWebEngineWidgets import QWebEngineView
-    from PySide6.QtCore import QUrl
-    import plotly
-    import tempfile
-    import os
+    try:
+        val = float(value)
+    except Exception:
+        return str(value)
 
-    # Create a temporary HTML file
-    temp_file = tempfile.NamedTemporaryFile(suffix='.html', delete=False)
-    plotly.offline.plot(fig, filename=temp_file.name, auto_open=False)
-
-    # Create web view widget
-    web_view = QWebEngineView()
-    web_view.load(QUrl.fromLocalFile(os.path.abspath(temp_file.name)))
-
-    return web_view
-
-def format_currency(value, with_sign=False):
-    """
-    Format a number as currency in SAR
-    """
-    prefix = ""
-    if with_sign and value > 0:
-        prefix = "+"
-
-    if abs(value) >= 1000000:
-        return f"{prefix}{abs(value)/1000000:.1f}M SAR"
-    elif abs(value) >= 1000:
-        return f"{prefix}{abs(value)/1000:.1f}K SAR"
-    else:
-        return f"{prefix}{abs(value):.0f} SAR"
+    prefix = "+" if with_sign and val > 0 else ""
+    a = abs(val)
+    if a >= 1_000_000:
+        return f"{prefix}{a/1_000_000:.1f}M SAR"
+    if a >= 1_000:
+        return f"{prefix}{a/1_000:.1f}K SAR"
+    return f"{prefix}{a:.0f} SAR"
