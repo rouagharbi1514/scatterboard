@@ -1,14 +1,12 @@
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas # type: ignore
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas  # type: ignore
+from matplotlib.ticker import PercentFormatter
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QGridLayout,
-    QPushButton,
-    QFrame,
+    QWidget, QVBoxLayout, QLabel, QGridLayout, QPushButton, QFrame, QSizePolicy
 )
 from PySide6.QtCore import Qt, QTimer, QAbstractTableModel
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QGraphicsDropShadowEffect
 from data import get_kpis, get_dataframe
 import pandas as pd
 import matplotlib
@@ -16,21 +14,18 @@ import matplotlib
 matplotlib.use("Qt5Agg")
 
 
+# ─────────────────── Table model (inchangé)
 class PandasTableModel(QAbstractTableModel):
     def __init__(self, data):
         super().__init__()
         self._data = data
 
-    def rowCount(self, parent=None):
-        return len(self._data)
+    def rowCount(self, parent=None): return len(self._data)
+    def columnCount(self, parent=None): return len(self._data.columns)
 
-    def columnCount(self, parent=None):
-        return len(self._data.columns)
-
-    def data(self, index, role=Qt.DisplayRole): # type: ignore
-        if role == Qt.DisplayRole: # type: ignore
-            value = self._data.iloc[index.row(), index.column()]
-            return str(value)
+    def data(self, index, role=Qt.DisplayRole):  # type: ignore
+        if role == Qt.DisplayRole:
+            return str(self._data.iloc[index.row(), index.column()])
         return None
 
     def headerData(self, section, orientation, role):
@@ -39,231 +34,236 @@ class PandasTableModel(QAbstractTableModel):
         return None
 
 
-class OverviewWidget(QWidget):
-    """Widget displaying an overview of hotel metrics."""
+# ─────────────────── Design tokens (plus clair)
+ACCENT = "#6EA8FF"
+ACCENT_2 = "#8EB8FF"
+TEXT_MAIN = "#F7FAFF"
+TEXT_MUTED = "#B8C2E6"
 
+GLOBAL_BG = """
+qradialgradient(cx:0.25, cy:0.1, radius:1.2,
+                fx:0.25, fy:0.1,
+                stop:0 #24356F, stop:0.35 #111936, stop:1 #0C1226)
+"""
+CARD_BG = """
+qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #182042, stop:1 #202B56)
+"""
+
+BASE_CSS = f"""
+QWidget#overview_widget {{
+    background: {GLOBAL_BG};
+}}
+/* Cartes génériques + cartes ML */
+QFrame[card="true"], QFrame[role="ml-card"] {{
+    background: {CARD_BG};
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 18px;
+}}
+/* Titre / sous-titre de page */
+QLabel[title="true"] {{
+    font-family:'Inter','Segoe UI',Arial;
+    font-size: 22px; font-weight: 800; color: {TEXT_MAIN};
+}}
+QLabel[subtitle="true"] {{
+    color: {TEXT_MUTED}; font-size: 13px;
+}}
+/* KPI tiles */
+QLabel[kpi-caption="true"] {{
+    color: {TEXT_MUTED}; font-size: 12px; font-weight: 700; letter-spacing:.2px;
+}}
+QLabel[kpi-value="true"] {{
+    color: {TEXT_MAIN}; font-size: 24px; font-weight: 900; letter-spacing:.2px;
+}}
+/* Bouton refresh (pill) */
+QPushButton#refreshBtn {{
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+    color:#fff; border:0; border-radius:999px; padding:10px 16px;
+    font-weight:700; font-family:'Inter','Segoe UI',Arial;
+}}
+QPushButton#refreshBtn:hover {{ filter: brightness(108%); }}
+"""
+
+def elevate(widget: QFrame, blur: int = 26, alpha: int = 55, y: int = 10):
+    shadow = QGraphicsDropShadowEffect()
+    shadow.setBlurRadius(blur)
+    shadow.setOffset(0, y)
+    shadow.setColor(QColor(0, 0, 0, alpha))
+    widget.setGraphicsEffect(shadow)
+
+
+def kpi_tile(title: str, min_h: int = 110):
+    """Carte KPI compacte (taille explicite, lisible)."""
+    card = QFrame()
+    card.setProperty("card", True)
+    elevate(card, blur=20, alpha=40, y=8)
+    card.setMinimumHeight(min_h)
+    card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    v = QVBoxLayout(card)
+    v.setContentsMargins(14, 10, 14, 12)
+    v.setSpacing(4)
+
+    bar = QFrame()
+    bar.setFixedHeight(3)
+    bar.setStyleSheet(
+        f"background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {ACCENT}, stop:1 {ACCENT_2});"
+        "border-radius:2px;"
+    )
+    cap = QLabel(title); cap.setProperty("kpi-caption", True)
+    val = QLabel("—");    val.setProperty("kpi-value", True)
+
+    v.addWidget(bar)
+    v.addSpacing(2)
+    v.addWidget(cap)
+    v.addWidget(val)
+    v.addStretch(1)
+    return card, val
+
+
+# ─────────────────── Overview (containers plus clairs)
+class OverviewWidget(QWidget):
+    """Design modernisé et tailles explicites pour plus de clarté."""
     def __init__(self):
         super().__init__()
         self.setObjectName("overview_widget")
+        self.setStyleSheet(BASE_CSS)
+
         self.data = None
         self.kpi_data = None
-        self.init_ui()
+        self.val_labels = {}
+        self._build_ui()
 
-        # Set up timer to refresh data every minute
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh_data)
-        self.timer.start(60000)  # Refresh every minute
+        self.timer.start(60_000)
 
-    def init_ui(self):
-        """Initialize the UI components."""
-        # Main layout
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
+    def _build_ui(self):
+        main = QVBoxLayout(self)
+        main.setContentsMargins(20, 20, 20, 20)
+        main.setSpacing(16)
 
-        # Add header
-        header = QLabel("Hotel Dashboard Overview")
-        header.setStyleSheet(
-            """
-            font-size: 24px;
-            font-weight: bold;
-            color: #ffffff;
-            margin-bottom: 10px;
-        """
-        )
-        main_layout.addWidget(header)
+        title = QLabel("Hotel Dashboard — Overview"); title.setProperty("title", True)
+        subtitle = QLabel("KPI principaux & tendance d’occupation — tailles de cartes uniformes.")
+        subtitle.setProperty("subtitle", True)
+        main.addWidget(title); main.addWidget(subtitle)
 
-        # Add description
-        description = QLabel(
-            "Welcome to the Hotel Dashboard. This overview shows key metrics and trends "
-            "from your hotel data. Use the navigation menu to explore detailed analyses."
-        )
-        description.setWordWrap(True)
-        description.setStyleSheet(
-            "font-size: 14px; color: #aaaaaa; margin-bottom: 15px;"
-        )
-        main_layout.addWidget(description)
+        grid = QGridLayout(); grid.setHorizontalSpacing(16); grid.setVerticalSpacing(16)
+        main.addLayout(grid)
 
-        # Create grid for KPI cards and charts
-        content_layout = QGridLayout()
-        content_layout.setSpacing(15)
-        main_layout.addLayout(content_layout)
+        # ---------- Board KPI (hauteur fixe et claire)
+        self.kpi_board = QFrame(); self.kpi_board.setProperty("card", True); elevate(self.kpi_board)
+        self.kpi_board.setMinimumHeight(260)  # bloc clair
+        kb = QVBoxLayout(self.kpi_board); kb.setContentsMargins(16, 16, 16, 16); kb.setSpacing(12)
 
-        # Add KPI summary card
-        self.kpi_card = QFrame()
-        self.kpi_card.setStyleSheet(
-            """
-            background-color: #2c2c2c;
-            border-radius: 8px;
-            padding: 15px;
-        """
-        )
-        kpi_layout = QVBoxLayout(self.kpi_card)
+        kgrid = QGridLayout(); kgrid.setHorizontalSpacing(12); kgrid.setVerticalSpacing(12)
 
-        kpi_header = QLabel("Key Performance Indicators")
-        kpi_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
-        kpi_layout.addWidget(kpi_header)
+        c1, v1 = kpi_tile("Average Occupancy")
+        c2, v2 = kpi_tile("ADR (Average Daily Rate)")
+        c3, v3 = kpi_tile("RevPAR")
+        c4, v4 = kpi_tile("GOPPAR")
+        c5, v5 = kpi_tile("Total Revenue")
 
-        self.kpi_content = QLabel("Loading data...")
-        self.kpi_content.setStyleSheet("font-size: 14px; color: #dddddd;")
-        self.kpi_content.setTextFormat(Qt.RichText)
-        kpi_layout.addWidget(self.kpi_content)
+        self.val_labels = {"avg_occ": v1, "avg_rate": v2, "revpar": v3, "goppar": v4, "total_rev": v5}
 
-        content_layout.addWidget(self.kpi_card, 0, 0, 1, 1)
+        kgrid.addWidget(c1, 0, 0); kgrid.addWidget(c2, 0, 1); kgrid.addWidget(c3, 0, 2)
+        kgrid.addWidget(c4, 1, 0); kgrid.addWidget(c5, 1, 1)
+        # case vide pour respirer si 2e ligne
+        spacer = QFrame(); spacer.setMinimumHeight(110); spacer.setProperty("card", True)
+        spacer.setStyleSheet("background: transparent; border: 1px dashed rgba(255,255,255,0.05);")
+        kgrid.addWidget(spacer, 1, 2)
 
-        # Add occupancy chart
-        self.occupancy_chart = QFrame()
-        self.occupancy_chart.setStyleSheet(
-            """
-            background-color: #2c2c2c;
-            border-radius: 8px;
-            padding: 15px;
-        """
-        )
-        occupancy_layout = QVBoxLayout(self.occupancy_chart)
+        kb.addLayout(kgrid)
+        grid.addWidget(self.kpi_board, 0, 0)
 
-        occupancy_header = QLabel("Occupancy Trend")
-        occupancy_header.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #ffffff;"
-        )
-        occupancy_layout.addWidget(occupancy_header)
+        # ---------- Carte Graphique / ML (hauteur explicite)
+        self.chart_card = QFrame(); self.chart_card.setProperty("role", "ml-card"); elevate(self.chart_card)
+        self.chart_card.setMinimumHeight(360)  # plus haut = plus lisible
+        self.chart_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.occupancy_figure = Figure(figsize=(5, 3), dpi=100)
+        cl = QVBoxLayout(self.chart_card); cl.setContentsMargins(16, 16, 16, 16); cl.setSpacing(10)
+        ct = QLabel("Occupancy Trend"); ct.setStyleSheet(f"color:{TEXT_MAIN}; font-weight:800; font-size:15px;")
+        cl.addWidget(ct)
+
+        self.occupancy_figure = Figure(figsize=(5, 3), dpi=100); self.occupancy_figure.patch.set_alpha(0.0)
         self.occupancy_canvas = Canvas(self.occupancy_figure)
-        occupancy_layout.addWidget(self.occupancy_canvas)
+        cl.addWidget(self.occupancy_canvas)
 
-        content_layout.addWidget(self.occupancy_chart, 0, 1, 1, 1)
+        grid.addWidget(self.chart_card, 0, 1)
 
-        # Add refresh button
-        refresh_button = QPushButton("Refresh Data")
-        refresh_button.clicked.connect(self.refresh_data)
-        refresh_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #0d6efd;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #0b5ed7;
-            }
-        """
-        )
-        main_layout.addWidget(refresh_button, alignment=Qt.AlignRight)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
-        # Add stretcher
-        main_layout.addStretch()
+        # ---------- Bouton Refresh (pill)
+        refresh = QPushButton("⟳  Refresh Data"); refresh.setObjectName("refreshBtn")
+        refresh.clicked.connect(self.refresh_data)
+        main.addWidget(refresh, alignment=Qt.AlignRight)
 
-        # Initial data load
+        main.addStretch()
         self.refresh_data()
 
+    # ───────── Helpers KPI
+    @staticmethod
+    def _money(v: float) -> str: return f"${v:,.2f}"
+    def _set(self, key: str, txt: str):
+        if key in self.val_labels: self.val_labels[key].setText(txt)
+
+    # ───────── Refresh (données → UI)
     def refresh_data(self):
-        """Refresh the data displayed in the overview."""
-        # Get the data
         self.data = get_dataframe()
         self.kpi_data = get_kpis()
 
-        # Update KPI content
         if self.kpi_data and "message" not in self.kpi_data:
-            # Format KPI values
-            avg_occ = self.kpi_data.get("average_occupancy", 0)
-            avg_rate = self.kpi_data.get("average_rate", 0)
-            revpar = self.kpi_data.get("revpar", 0)
-            goppar = self.kpi_data.get("goppar", 0)
+            avg_occ = float(self.kpi_data.get("average_occupancy", 0))
+            avg_rate = float(self.kpi_data.get("average_rate", 0))
+            revpar   = float(self.kpi_data.get("revpar", 0))
+            goppar   = float(self.kpi_data.get("goppar", 0))
+            total_revenue = 0.0
+            if self.data is not None and {"rate","occupancy"}.issubset(self.data.columns):
+                total_revenue = float((self.data["rate"] * self.data["occupancy"]).sum())
 
-            # Calculate total revenue if possible
-            total_revenue = 0
-            if (
-                self.data is not None
-                and "rate" in self.data.columns
-                and "occupancy" in self.data.columns
-            ):
-                total_revenue = (self.data["rate"] * self.data["occupancy"]).sum()
-
-            # Format the KPI text with HTML
-            kpi_text = f"""
-            <b>Average Occupancy:</b> {avg_occ:.1f}%<br>
-            <b>Average Daily Rate:</b> ${avg_rate:.2f}<br>
-            <b>RevPAR:</b> ${revpar:.2f}<br>
-            <b>GOPPAR:</b> ${goppar:.2f}<br>
-            <b>Total Revenue:</b> ${total_revenue:.2f}<br>
-            """
-
-            self.kpi_content.setText(kpi_text)
+            self._set("avg_occ", f"{avg_occ:.1f}%")
+            self._set("avg_rate", self._money(avg_rate))
+            self._set("revpar",   self._money(revpar))
+            self._set("goppar",   self._money(goppar))
+            self._set("total_rev",self._money(total_revenue))
         else:
-            error_msg = "No KPI data available"
-            if self.kpi_data and "message" in self.kpi_data:
-                error_msg = self.kpi_data["message"]
-            self.kpi_content.setText(f"<i>{error_msg}</i>")
+            for k in self.val_labels: self._set(k, "—")
 
-        # Update occupancy chart
-        if (
-            self.data is not None
-            and "date" in self.data.columns
-            and "occupancy" in self.data.columns
-        ):
+        # Graphique (plus clair)
+        if self.data is not None and {"date","occupancy"}.issubset(self.data.columns):
             try:
-                # Ensure date is datetime
                 if not pd.api.types.is_datetime64_any_dtype(self.data["date"]):
                     self.data["date"] = pd.to_datetime(self.data["date"])
+                monthly = (self.data.groupby(self.data["date"].dt.to_period("M"))["occupancy"].mean().sort_index())
 
-                # Group by month and calculate average occupancy
-                monthly_occupancy = self.data.groupby(
-                    self.data["date"].dt.to_period("M")
-                )["occupancy"].mean()
-
-                # Clear the figure
                 self.occupancy_figure.clear()
-
-                # Create new plot
                 ax = self.occupancy_figure.add_subplot(111)
+                ax.set_facecolor((0,0,0,0))
 
-                # Plot the data
-                months = [period.to_timestamp() for period in monthly_occupancy.index]
-                ax.plot(
-                    months,
-                    monthly_occupancy.values,
-                    marker="o",
-                    linestyle="-",
-                    color="#4CAF50",
-                )
+                months = [p.to_timestamp() for p in monthly.index]
+                y = monthly.values
+                ax.plot(months, y, color=ACCENT, linewidth=3.0)
+                ax.fill_between(months, y, 0, color=ACCENT, alpha=0.18)
+                ax.scatter(months, y, s=22, color=ACCENT_2, zorder=3)
 
-                # Format the plot
                 ax.set_ylim(0, 1)
-                ax.set_xlabel("")
-                ax.grid(True, linestyle="--", alpha=0.7)
+                ax.grid(True, linestyle="--", alpha=0.22)
+                for side in ("top","right","left","bottom"):
+                    ax.spines[side].set_alpha(0.15)
 
-                # Format y-axis as percentage
-                vals = ax.get_yticks()
-                ax.set_yticklabels([f"{x:.0%}" for x in vals])
-
-                # Format x-axis to show month names
+                ax.yaxis.set_major_formatter(PercentFormatter(1.0))
                 import matplotlib.dates as mdates
-
                 ax.xaxis.set_major_formatter(mdates.DateFormatter("%b"))
 
-                # Update the canvas
                 self.occupancy_figure.tight_layout()
                 self.occupancy_canvas.draw()
             except Exception as e:
-                print(f"Error updating occupancy chart: {e}")
-
-                # Show error on chart
+                print(f"Chart error: {e}")
                 self.occupancy_figure.clear()
                 ax = self.occupancy_figure.add_subplot(111)
-                ax.text(
-                    0.5,
-                    0.5,
-                    f"Error: {str(e)}",
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    transform=ax.transAxes,
-                    fontsize=10,
-                    color="#FF9800",
-                )
+                ax.text(0.5, 0.5, f"Error: {e}", ha="center", va="center",
+                        transform=ax.transAxes, fontsize=10, color="#FF9800")
                 ax.axis("off")
                 self.occupancy_figure.tight_layout()
                 self.occupancy_canvas.draw()
@@ -272,3 +272,4 @@ class OverviewWidget(QWidget):
 def display():
     """Display hotel dashboard overview."""
     return OverviewWidget()
+
