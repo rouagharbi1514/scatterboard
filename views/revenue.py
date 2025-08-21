@@ -1,120 +1,130 @@
 # flake8: noqa
 # views/revenue.py
 """
-Revenue Analysis View
-====================
+Revenue Analysis View — modern soft UI
+======================================
 
-Shows key revenue metrics and interactive visualizations.
+• Palette pastel, cartes, onglets arrondis (mêmes styles que les autres vues)
+• Date-range toolbar compacte
+• Panneaux "Show insight" repliables
 """
 
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QDateEdit,
-    QPushButton,
-    QTabWidget,
-    QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDateEdit, QPushButton,
+    QTabWidget, QSizePolicy, QFrame
 )
-from data.helpers import get_df
 from PySide6.QtCore import Qt, QDate
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings
+
+import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# Import the data_required decorator from utils
+from data.helpers import get_df
 from views.utils import data_required
-# Import data validation utilities
-from views.data_validator import DataValidator, validate_revenue_data
+
+# (Facultatif) import du validateur si vous l’utilisez ailleurs
+from views.data_validator import DataValidator, validate_revenue_data  # noqa: F401
 
 
-def _plotly_view(fig):
+# ─────────────────────────────────────────────────────────
+# Palette douce + helpers
+# ─────────────────────────────────────────────────────────
+GRID_COLOR = "#eef2f7"
+FONT_COLOR = "#0f172a"
+
+SOFT_BLUE  = "#64b5f6"
+SOFT_RED   = "#ef9a9a"
+SOFT_TEAL  = "#80cbc4"
+SOFT_MINT  = "#a7f3d0"
+SOFT_LILAC = "#c4b5fd"
+SOFT_AMBER = "#fde68a"
+SOFT_GREEN = "#9ae6b4"
+SOFT_CORAL = "#f8b4b4"
+SOFT_CYAN  = "#9cd3d3"
+SOFT_GREY  = "#cfd8e3"
+
+
+def _apply_soft_layout(fig: go.Figure, title: str, height: int = 500):
+    fig.update_layout(
+        title=title,
+        height=height,
+        template="plotly_white",
+        font=dict(color=FONT_COLOR, size=11),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=40, r=30, t=60, b=40),
+        hovermode="x unified",
+    )
+    fig.update_xaxes(showgrid=True, gridcolor=GRID_COLOR, zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor=GRID_COLOR, zeroline=False)
+
+
+def _plotly_view(fig: go.Figure) -> QWebEngineView:
     """Create a QWebEngineView widget from a Plotly figure."""
     from io import StringIO
-
-    # Generate HTML for the plot
-    html = StringIO()
-    fig.write_html(html, include_plotlyjs='cdn', full_html=False)
-    html = html.getvalue()
-
-    # Create web view
+    html_buf = StringIO()
+    fig.write_html(html_buf, include_plotlyjs="cdn", full_html=False)
     view = QWebEngineView()
-    view.setHtml(html)
+    view.setHtml(html_buf.getvalue())
     view.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
     view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     return view
 
 
 def _collapsible(text: str) -> QWidget:
-    """Create a collapsible explanation panel.
-
-    Args:
-        text: The explanation text to display
-
-    Returns:
-        A widget containing a toggle button and collapsible text panel
-    """
+    """Panneau repliable pour les insights (design doux)."""
     container = QWidget()
     layout = QVBoxLayout(container)
-    layout.setContentsMargins(0, 5, 0, 5)
+    layout.setContentsMargins(0, 6, 0, 0)
 
-    # Toggle button
-    toggle_btn = QPushButton("Show explanation")
+    toggle_btn = QPushButton("Show insight")
+    toggle_btn.setCursor(Qt.PointingHandCursor)
     toggle_btn.setStyleSheet("""
         QPushButton {
-            background-color: #4a86e8;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            max-width: 150px;
+            background-color: #e9efff;
+            color: #1d4ed8;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-weight: 600;
+            border: 1px solid #dbe6ff;
+            max-width: 140px;
         }
-        QPushButton:hover {
-            background-color: #3a76d8;
-        }
+        QPushButton:hover { background-color: #e3eaff; }
+        QPushButton:pressed { background-color: #d8e2ff; }
     """)
 
-    # Explanation label with dark blue background
     explanation = QLabel(text)
     explanation.setWordWrap(True)
     explanation.setStyleSheet("""
-        background-color: rgba(25, 45, 90, 0.9);
-        color: white;
-        padding: 15px;
-        border-radius: 5px;
-        font-size: 11pt;
-        line-height: 1.4;
+        QLabel {
+            background-color: #f6f8fc;
+            color: #334155;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #e5e9f2;
+            font-size: 11pt;
+            line-height: 1.45;
+        }
     """)
     explanation.setVisible(False)
 
-    # Add widgets to layout
     layout.addWidget(toggle_btn)
     layout.addWidget(explanation)
 
-    # Connect toggle button
     def toggle_explanation():
         is_visible = explanation.isVisible()
         explanation.setVisible(not is_visible)
-        toggle_btn.setText("Hide explanation" if not is_visible else "Show explanation")
+        toggle_btn.setText("Hide insight" if not is_visible else "Show insight")
 
     toggle_btn.clicked.connect(toggle_explanation)
-
     return container
 
 
 def _classify_performance(value: float) -> str:
-    """Classify performance based on profit margin or RevPAR uplift.
-
-    Args:
-        value: The profit margin or RevPAR uplift percentage
-
-    Returns:
-        Classification as "strong", "moderate", or "weak"
-    """
     if value >= 30:
         return "strong"
     elif value >= 15:
@@ -123,171 +133,209 @@ def _classify_performance(value: float) -> str:
         return "weak"
 
 
+def _card_wrap(widget: QWidget) -> QFrame:
+    """Encapsule un widget dans une 'carte' douce."""
+    card = QFrame()
+    card.setObjectName("card")
+    card.setStyleSheet("""
+        QFrame#card {
+            background: #ffffff;
+            border: 1px solid #e5e9f2;
+            border-radius: 12px;
+        }
+    """)
+    lay = QVBoxLayout(card)
+    lay.setContentsMargins(10, 10, 10, 10)
+    lay.addWidget(widget)
+    return card
+
+
+# ─────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────
 @data_required
 def display() -> QWidget:
-    """Display revenue analysis dashboard."""
+    """Display revenue analysis dashboard (modern UI)."""
     try:
         base_df = get_df()
 
-        # Create UI structure
+        # UI root + QSS global (même design que les autres vues)
         root = QWidget()
+        root.setObjectName("RevenueRoot")
         root.setLayout(QVBoxLayout())
+        root.layout().setContentsMargins(12, 12, 12, 12)
+        root.layout().setSpacing(10)
+
+        root.setStyleSheet("""
+            QWidget#RevenueRoot {
+                background: #fbfcfe;
+                color: #0f172a;
+                font-size: 13px;
+            }
+            QLabel#header {
+                color: #0f172a;
+                font-size: 20px;
+                font-weight: 800;
+                padding: 12px 16px;
+                border-radius: 14px;
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #f4f7ff, stop:1 #ffffff);
+                border: 1px solid #e9edf7;
+            }
+            QFrame#toolbar {
+                background: #ffffff;
+                border: 1px solid #e5e9f2;
+                border-radius: 12px;
+            }
+            QFrame#toolbar QLabel { color: #334155; }
+            QDateEdit {
+                background: #ffffff;
+                border: 1px solid #dfe6f3;
+                border-radius: 8px;
+                padding: 6px 8px;
+                min-width: 130px;
+                selection-background-color: #e0eaff;
+            }
+            QDateEdit::drop-down { width: 18px; }
+            QPushButton#applyBtn {
+                background: #e9efff;
+                color: #1d4ed8;
+                border: 1px solid #dbe6ff;
+                border-radius: 10px;
+                padding: 8px 14px;
+                font-weight: 600;
+            }
+            QPushButton#applyBtn:hover  { background: #e3eaff; }
+            QPushButton#applyBtn:pressed{ background: #d8e2ff; }
+
+            QTabWidget::pane {
+                border: 1px solid #e5e9f2;
+                border-radius: 12px;
+                background: #ffffff;
+                padding: 4px;
+            }
+            QTabBar::tab {
+                background: #f6f8fc;
+                border: 1px solid #e5e9f2;
+                padding: 7px 14px;
+                margin-right: 6px;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                color: #334155;
+            }
+            QTabBar::tab:selected {
+                background: #ffffff;
+                color: #0f172a;
+                border-bottom-color: transparent;
+            }
+            QTabBar::tab:hover { background: #eef2f9; }
+        """)
+
+        # Header
         header = QLabel("Revenue Analysis")
-        header.setStyleSheet("font-size:18pt;font-weight:bold;margin-bottom:15px;")
+        header.setObjectName("header")
         root.layout().addWidget(header)
+
+        # Toolbar (date range)
+        toolbar = QFrame()
+        toolbar.setObjectName("toolbar")
+        tl = QHBoxLayout(toolbar)
+        tl.setContentsMargins(12, 10, 12, 10)
+        tl.setSpacing(8)
 
         # Date pickers
         start_picker = QDateEdit()
         end_picker = QDateEdit()
         for p in (start_picker, end_picker):
             p.setCalendarPopup(True)
-            p.setStyleSheet("padding:5px;")
-            p.setFixedWidth(120)
 
         # Set initial date range
         def refresh_date_pickers():
             try:
-                if "date" in base_df.columns:
-                    d0 = base_df["date"].min().date()
-                    d1 = base_df["date"].max().date()
+                col = "date" if "date" in base_df.columns else "Date"
+                if col in base_df.columns:
+                    d0 = pd.to_datetime(base_df[col]).min().date()
+                    d1 = pd.to_datetime(base_df[col]).max().date()
                     start_picker.setDate(QDate(d0.year, d0.month, d0.day))
                     end_picker.setDate(QDate(d1.year, d1.month, d1.day))
             except Exception as e:
                 print(f"Error setting date range: {e}")
 
-        refresh_date_pickers()  # initial sync
+        refresh_date_pickers()
 
-        # Filter row
-        filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Date Range:"))
-        filter_row.addWidget(start_picker)
-        filter_row.addWidget(QLabel(" to "))
-        filter_row.addWidget(end_picker)
+        tl.addWidget(QLabel("Date Range:"))
+        tl.addWidget(start_picker)
+        tl.addWidget(QLabel(" to "))
+        tl.addWidget(end_picker)
+        tl.addStretch()
 
-        # Apply button
         apply_btn = QPushButton("Apply")
-        apply_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4a86e8;
-                color: white;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #3a76d8;
-            }
-        """)
-        filter_row.addWidget(apply_btn)
-        filter_row.addStretch()
-        root.layout().addLayout(filter_row)
+        apply_btn.setObjectName("applyBtn")
+        tl.addWidget(apply_btn)
+        root.layout().addWidget(toolbar)
 
-        # Content area
+        # Tabs container
         content = QTabWidget()
-        content.setTabPosition(QTabWidget.North)
-        content.setStyleSheet("""
-            QTabWidget::pane { border: 0; }
-            QTabBar::tab {
-                background: rgba(40, 40, 40, 0.7);  /* Transparent black */
-                color: white;  /* White text for contrast */
-                padding: 8px 16px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                border: 1px solid #555555;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background: rgba(0, 0, 0, 0.8);  /* Darker transparent black when selected */
-                border-bottom: 2px solid #4a86e8;  /* Blue indicator at bottom */
-                font-weight: bold;
-            }
-            QTabBar::tab:hover:!selected {
-                background: rgba(60, 60, 60, 0.7);  /* Slightly lighter on hover */
-            }
-        """)
         root.layout().addWidget(content, 1)
 
-        # Function to filter data by date range
-        def filter_data(df, start_date, end_date):
-            if "date" not in df.columns:
-                return df
+        # Helpers
+        def _ensure_date_col(df: pd.DataFrame) -> str:
+            return "date" if "date" in df.columns else "Date"
 
-            # Ensure date column is datetime
-            if not pd.api.types.is_datetime64_any_dtype(df["date"]):
-                df = df.copy()
-                df["date"] = pd.to_datetime(df["date"])
+        def filter_data(df: pd.DataFrame, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+            col = _ensure_date_col(df)
+            d = df.copy()
+            if not pd.api.types.is_datetime64_any_dtype(d[col]):
+                d[col] = pd.to_datetime(d[col])
+            mask = (d[col] >= start_date) & (d[col] <= end_date)
+            return d.loc[mask]
 
-            # Filter by date range
-            mask = (df["date"] >= start_date) & (df["date"] <= end_date)
-            return df[mask]
-
-        # Render function to update charts
+        # Render
         def render():
             try:
-                # Clear previous content
                 content.clear()
 
-                # Get date range
                 start_date = pd.Timestamp(start_picker.date().toPython())
                 end_date = pd.Timestamp(end_picker.date().toPython())
-
-                # Filter data
                 df = filter_data(base_df, start_date, end_date)
 
                 if df.empty:
-                    empty_widget = QWidget()
-                    empty_layout = QVBoxLayout(empty_widget)
-                    empty_message = QLabel("No data available for the selected date range")
-                    empty_message.setStyleSheet("font-size: 14pt; color: #aaaaaa;")
-                    empty_layout.addWidget(empty_message, 0, Qt.AlignCenter)
-                    content.addTab(empty_widget, "No Data")
+                    empty = QWidget()
+                    lay = QVBoxLayout(empty)
+                    msg = QLabel("No data available for the selected date range")
+                    msg.setStyleSheet("font-size: 14pt; color: #8b5e34;")
+                    lay.addWidget(msg, 0, Qt.AlignCenter)
+                    content.addTab(empty, "Info")
                     return
 
-                # Calculate KPIs (keep the calculations for use in explanations, but don't display)
-                # For demo, assume we have 100 rooms
-                room_count = 100
+                # Normalisations
+                date_col = _ensure_date_col(df)
+                df = df.copy()
+                df.rename(columns={date_col: "date"}, inplace=True)
 
-                # Create calculated columns if needed
+                # Calculs auxiliaires
+                ROOM_COUNT = 100
                 if "rate" in df.columns and "occupancy" in df.columns:
-                    df["calculated_revenue"] = df["rate"] * df["occupancy"] * room_count
                     df["revpar"] = df["rate"] * df["occupancy"]
+                    df["calculated_revenue"] = df["rate"] * df["occupancy"] * ROOM_COUNT
 
-                # Get average values with checks for column existence
-                if "occupancy" in df.columns:
-                    # Convert to percentage
-                    avg_occupancy = df["occupancy"].mean() * 100
-                else:
-                    avg_occupancy = 0
-
-                avg_rate = df["rate"].mean() if "rate" in df.columns else 0
-
-                if "revpar" in df.columns:
-                    avg_revpar = df["revpar"].mean()
-                elif "rate" in df.columns and "occupancy" in df.columns:
-                    avg_revpar = (df["rate"] * df["occupancy"]).mean()
-                else:
-                    avg_revpar = 0
-
-                # Calculate total revenue
-                if "calculated_revenue" in df.columns:
-                    total_revenue = df["calculated_revenue"].sum()
-                else:
-                    total_revenue = 0
-
-                # Generate synthetic cost data if needed
                 if "cost_per_occupied_room" not in df.columns and "rate" in df.columns:
-                    # Base cost on 40% of room rate
                     df["cost_per_occupied_room"] = df["rate"] * 0.4
 
-                if "cost_per_occupied_room" in df.columns and "occupancy" in df.columns:
-                    df["cost"] = df["cost_per_occupied_room"] * df["occupancy"] * room_count
-                    total_cost = df["cost"].sum()
-                    profit = total_revenue - total_cost
-                    profit_margin = (profit / total_revenue) * 100 if total_revenue > 0 else 0
-                else:
-                    total_cost = 0
-                    profit = 0
-                    profit_margin = 0
+                if {"cost_per_occupied_room", "occupancy"}.issubset(df.columns):
+                    df["cost"] = df["cost_per_occupied_room"] * df["occupancy"] * ROOM_COUNT
+
+                # KPIs
+                avg_occ = (df["occupancy"].mean() * 100) if "occupancy" in df.columns else 0
+                avg_rate = df["rate"].mean() if "rate" in df.columns else 0
+                avg_revpar = (
+                    df["revpar"].mean()
+                    if "revpar" in df.columns
+                    else (df["rate"] * df["occupancy"]).mean() if {"rate", "occupancy"}.issubset(df.columns) else 0
+                )
+                total_revenue = df["calculated_revenue"].sum() if "calculated_revenue" in df.columns else 0
+                total_cost = df["cost"].sum() if "cost" in df.columns else 0
+                profit = total_revenue - total_cost
+                profit_margin = (profit / total_revenue) * 100 if total_revenue > 0 else 0
 
                 # ========================
                 # Dashboard Tab
@@ -295,203 +343,124 @@ def display() -> QWidget:
                 dashboard_tab = QWidget()
                 dashboard_tab.setLayout(QVBoxLayout())
 
-                # Create main dashboard figure
+                # Subplots: 2x2 (avec axes secondaires où nécessaire)
                 fig = make_subplots(
                     rows=2, cols=2,
                     specs=[
-                        [{"type": "xy", "rowspan": 1}, {"type": "domain"}],
-                        [{"type": "xy"}, {"type": "xy"}]
+                        [{"secondary_y": False}, {"type": "domain"}],
+                        [{"secondary_y": True}, {"secondary_y": True}],
                     ],
                     subplot_titles=(
-                        "Revenue & Cost Trend",
-                        "Revenue by Day of Week",
-                        "Occupancy & Rate Trend",
-                        "Profit Margin Analysis"
+                        "Revenue & Cost Trend", "Revenue by Day of Week",
+                        "Occupancy & Rate Trend", "Profit & Margin"
                     ),
-                    vertical_spacing=0.15,
-                    horizontal_spacing=0.15
+                    vertical_spacing=0.15, horizontal_spacing=0.15
                 )
 
-                # Chart 1: Revenue & Cost Trend (Top-left)
-                daily_data = df.groupby("date").agg({
-                    "calculated_revenue": "sum",
-                    "cost": "sum" if "cost" in df.columns else None
-                }).reset_index()
+                # 1) Revenue & Cost Trend (1,1)
+                daily = df.groupby("date").agg(
+                    calculated_revenue=("calculated_revenue", "sum"),
+                    cost=("cost", "sum")
+                ).reset_index()
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=daily_data["date"],
-                        y=daily_data["calculated_revenue"],
-                        name="Revenue",
-                        mode="lines+markers",
-                        line=dict(color="#3b82f6", width=3),
-                        marker=dict(size=8)
-                    ),
-                    row=1, col=1
+                fig.add_trace(go.Scatter(
+                    x=daily["date"], y=daily["calculated_revenue"],
+                    name="Revenue", mode="lines+markers",
+                    line=dict(color=SOFT_BLUE, width=3),
+                    marker=dict(size=7, line=dict(color="white", width=1))
+                ), row=1, col=1)
+
+                if "cost" in daily.columns and daily["cost"].notna().any():
+                    fig.add_trace(go.Scatter(
+                        x=daily["date"], y=daily["cost"],
+                        name="Cost", mode="lines+markers",
+                        line=dict(color=SOFT_RED, width=3),
+                        marker=dict(size=7, line=dict(color="white", width=1))
+                    ), row=1, col=1)
+
+                # 2) Revenue by Day of Week (1,2)
+                if "calculated_revenue" in df.columns:
+                    df["weekday"] = df["date"].dt.day_name()
+                    weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    w = (df.groupby("weekday")["calculated_revenue"].sum()
+                         .reindex(weekday_order)
+                         .fillna(0)
+                         .reset_index())
+
+                    fig.add_trace(go.Pie(
+                        labels=w["weekday"], values=w["calculated_revenue"], hole=0.45,
+                        marker_colors=[SOFT_BLUE, "#93c5fd", "#bfdbfe", "#dbeafe", "#eff6ff", SOFT_MINT, SOFT_TEAL],
+                        textinfo="percent+label", hoverinfo="label+value+percent", textposition="inside",
+                        name="Revenue by Weekday"
+                    ), row=1, col=2)
+                else:
+                    fig.add_trace(go.Pie(labels=["No revenue"], values=[1], hole=0.45), row=1, col=2)
+
+                # 3) Occupancy & Rate Trend (2,1) — axes secondaires
+                if {"occupancy", "rate"}.issubset(df.columns):
+                    daily_m = df.groupby("date").agg(occupancy=("occupancy", "mean"), rate=("rate", "mean")).reset_index()
+                    fig.add_trace(go.Scatter(
+                        x=daily_m["date"], y=daily_m["occupancy"] * 100,
+                        name="Occupancy (%)", mode="lines+markers",
+                        line=dict(color=SOFT_TEAL, width=3),
+                        marker=dict(size=7, line=dict(color="white", width=1))
+                    ), row=2, col=1, secondary_y=False)
+
+                    fig.add_trace(go.Scatter(
+                        x=daily_m["date"], y=daily_m["rate"],
+                        name="Avg Rate ($)", mode="lines+markers",
+                        line=dict(color=SOFT_AMBER, width=3, dash="dash"),
+                        marker=dict(size=7, line=dict(color="white", width=1))
+                    ), row=2, col=1, secondary_y=True)
+
+                    fig.update_yaxes(title_text="Occupancy (%)", secondary_y=False, row=2, col=1)
+                    fig.update_yaxes(title_text="Avg Rate ($)", secondary_y=True, row=2, col=1)
+
+                # 4) Profit & Margin (2,2)
+                if {"calculated_revenue", "cost"}.issubset(df.columns):
+                    pr = df.groupby("date").agg(
+                        revenue=("calculated_revenue", "sum"),
+                        cost=("cost", "sum")
+                    ).reset_index()
+                    pr["profit"] = pr["revenue"] - pr["cost"]
+                    pr["margin%"] = np.where(pr["revenue"] > 0, pr["profit"] / pr["revenue"] * 100, 0.0)
+
+                    fig.add_trace(go.Bar(
+                        x=pr["date"], y=pr["profit"], name="Profit", marker_color=SOFT_GREEN,
+                        text=[f"${v:,.0f}" for v in pr["profit"]], textposition="outside"
+                    ), row=2, col=2, secondary_y=False)
+
+                    fig.add_trace(go.Scatter(
+                        x=pr["date"], y=pr["margin%"], name="Profit Margin (%)",
+                        mode="lines+markers", line=dict(color=SOFT_LILAC, width=3),
+                        marker=dict(size=7, line=dict(color="white", width=1))
+                    ), row=2, col=2, secondary_y=True)
+
+                    fig.update_yaxes(title_text="Profit ($)", tickformat="$,.0f", secondary_y=False, row=2, col=2)
+                    fig.update_yaxes(title_text="Margin (%)", ticksuffix="%", secondary_y=True, row=2, col=2)
+
+                _apply_soft_layout(fig, "Dashboard", height=900)
+
+                # Highest weekday for insight
+                if "calculated_revenue" in df.columns:
+                    w2 = df.groupby(df["date"].dt.day_name())["calculated_revenue"].sum()
+                    highest_day = w2.idxmax()
+                    highest_val = w2.max()
+                else:
+                    highest_day, highest_val = "—", 0
+
+                perf_class = _classify_performance(profit_margin)
+                dashboard_expl = (
+                    f"Overall profit margin is **{profit_margin:.1f}%** (**{perf_class}**). "
+                    f"A widening gap between revenue (blue) and cost (red) signale une marge en amélioration. "
+                    f"\n\nLe jour générant le plus de revenu est **{highest_day}** (≈ ${highest_val:,.0f}). "
+                    f"ADR moyen **${avg_rate:.2f}**, Occupancy **{avg_occ:.1f}%**, RevPAR **${avg_revpar:.2f}**."
                 )
 
-                if "cost" in daily_data.columns:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=daily_data["date"],
-                            y=daily_data["cost"],
-                            name="Cost",
-                            mode="lines+markers",
-                            line=dict(color="#ef4444", width=3),
-                            marker=dict(size=8)
-                        ),
-                        row=1, col=1
-                    )
-
-                # Chart 2: Revenue by Day of Week (Top-right)
-                df["weekday"] = df["date"].dt.day_name()
-                weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                weekday_revenue = df.groupby("weekday")["calculated_revenue"].sum().reset_index()
-                weekday_revenue["weekday"] = pd.Categorical(
-                    weekday_revenue["weekday"],
-                    categories=weekday_order,
-                    ordered=True
-                )
-                weekday_revenue = weekday_revenue.sort_values("weekday")
-
-                fig.add_trace(
-                    go.Pie(
-                        labels=weekday_revenue["weekday"],
-                        values=weekday_revenue["calculated_revenue"],
-                        name="Revenue by Weekday",
-                        hole=0.4,
-                        marker_colors=["#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe", "#eff6ff", "#f0f9ff"],
-                        textinfo="percent+label",
-                        hoverinfo="label+value+percent",
-                        textposition="inside"
-                    ),
-                    row=1, col=2
-                )
-
-                # Chart 3: Occupancy & Rate Trend (Bottom-left)
-                daily_metrics = df.groupby("date").agg({
-                    "occupancy": "mean",
-                    "rate": "mean"
-                }).reset_index()
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=daily_metrics["date"],
-                        y=daily_metrics["occupancy"],
-                        name="Occupancy",
-                        mode="lines+markers",
-                        line=dict(color="#10b981", width=3),
-                        marker=dict(size=8),
-                        yaxis="y3"
-                    ),
-                    row=2, col=1
-                )
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=daily_metrics["date"],
-                        y=daily_metrics["rate"],
-                        name="Avg Rate",
-                        mode="lines+markers",
-                        line=dict(color="#f59e0b", width=3, dash="dash"),
-                        marker=dict(size=8),
-                        yaxis="y4"
-                    ),
-                    row=2, col=1
-                )
-
-                # Configure secondary axes
-                fig.update_layout(
-                    yaxis3=dict(title="Occupancy", showgrid=True),
-                    yaxis4=dict(
-                        title="Avg Rate ($)",
-                        overlaying="y3",
-                        side="right",
-                        showgrid=False
-                    )
-                )
-
-                # Chart 4: Profit Margin Analysis (Bottom-right)
-                if "cost" in df.columns:
-                    profit_data = df.groupby("date").agg({
-                        "calculated_revenue": "sum",
-                        "cost": "sum"
-                    }).reset_index()
-                    profit_data["profit"] = profit_data["calculated_revenue"] - profit_data["cost"]
-                    profit_data["profit_margin"] = (profit_data["profit"] / profit_data["calculated_revenue"]) * 100
-
-                    fig.add_trace(
-                        go.Bar(
-                            x=profit_data["date"],
-                            y=profit_data["profit"],
-                            name="Profit",
-                            marker_color="#10b981",
-                            opacity=0.7
-                        ),
-                        row=2, col=2
-                    )
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=profit_data["date"],
-                            y=profit_data["profit_margin"],
-                            name="Profit Margin",
-                            mode="lines+markers",
-                            line=dict(color="#8b5cf6", width=3),
-                            marker=dict(size=8),
-                            yaxis="y5"
-                        ),
-                        row=2, col=2
-                    )
-
-                    # Configure secondary axis
-                    fig.update_layout(
-                        yaxis5=dict(
-                            title="Profit Margin (%)",
-                            overlaying="y",
-                            side="right",
-                            showgrid=False,
-                            range=[0, 100]
-                        )
-                    )
-
-                # Update overall layout
-                fig.update_layout(
-                    height=900,
-                    title_font_size=20,
-                    title_x=0.5,
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="right",
-                        x=1
-                    ),
-                    hovermode="x unified",
-                    template="plotly_white",
-                    font=dict(color='black'),  # Ensure text is black for readability
-                    margin=dict(t=50, b=50, l=50, r=50)  # Reduced top margin since title is gone
-                )
-
-                dashboard_tab.layout().addWidget(_plotly_view(fig))
-
-                # Create explanation text for dashboard
-                performance_class = _classify_performance(profit_margin)
-
-                # Find highest revenue day
-                highest_revenue_day = weekday_revenue.iloc[weekday_revenue["calculated_revenue"].argmax()]["weekday"]
-
-                dashboard_explanation = (
-                    f"Overall profit margin is {profit_margin:.1f}%, which is considered **{performance_class}** "
-                    f"potential. The top-left chart shows revenue vs cost trend; a widening gap signals healthier profitability. "
-                    f"\n\nThe pie chart reveals {highest_revenue_day} generates the highest revenue at "
-                    f"${weekday_revenue['calculated_revenue'].max():.0f}. "
-                    f"Average daily rate is ${avg_rate:.2f} with {avg_occupancy:.1f}% occupancy, "
-                    f"yielding RevPAR of ${avg_revpar:.2f}."
-                )
-
-                dashboard_tab.layout().addWidget(_collapsible(dashboard_explanation))
+                # Card + insight
+                dash_card = _card_wrap(_plotly_view(fig))
+                dashboard_tab.layout().addWidget(dash_card)
+                dashboard_tab.layout().addWidget(_collapsible(dashboard_expl))
                 content.addTab(dashboard_tab, "Dashboard")
 
                 # ========================
@@ -500,154 +469,83 @@ def display() -> QWidget:
                 analysis_tab = QWidget()
                 analysis_tab.setLayout(QVBoxLayout())
 
-                # Create analysis figure
                 analysis_fig = make_subplots(
                     rows=2, cols=1,
+                    specs=[[{"secondary_y": True}], [{"secondary_y": True}]],
                     subplot_titles=("Revenue Composition", "Performance Metrics"),
-                    vertical_spacing=0.2
+                    vertical_spacing=0.18
                 )
 
-                # Revenue Composition
-                if "room_type" in df.columns:
-                    room_revenue = df.groupby("room_type")["calculated_revenue"].sum().reset_index()
+                # Revenue Composition (by room_type) + Avg Rate (secondary)
+                if {"room_type", "calculated_revenue"}.issubset(df.columns):
+                    room_rev = df.groupby("room_type")["calculated_revenue"].sum().sort_values(ascending=False)
+                    analysis_fig.add_trace(go.Bar(
+                        x=room_rev.index, y=room_rev.values, name="Revenue by Room Type",
+                        marker_color=SOFT_BLUE, opacity=0.9
+                    ), row=1, col=1, secondary_y=False)
 
-                    analysis_fig.add_trace(
-                        go.Bar(
-                            x=room_revenue["room_type"],
-                            y=room_revenue["calculated_revenue"],
-                            name="Revenue by Room Type",
-                            marker_color="#3b82f6",
-                            opacity=0.8
-                        ),
-                        row=1, col=1
-                    )
-
-                    # Add average rate to the same chart
-                    room_rates = df.groupby("room_type")["rate"].mean().reset_index()
-
-                    analysis_fig.add_trace(
-                        go.Scatter(
-                            x=room_rates["room_type"],
-                            y=room_rates["rate"],
-                            name="Avg Rate",
+                    room_rate = df.groupby("room_type")["rate"].mean().reindex(room_rev.index) if "rate" in df.columns else None
+                    if room_rate is not None:
+                        analysis_fig.add_trace(go.Scatter(
+                            x=room_rate.index, y=room_rate.values, name="Avg Rate",
                             mode="lines+markers",
-                            line=dict(color="#f59e0b", width=3),
-                            marker=dict(size=10),
-                            yaxis="y2"
-                        ),
-                        row=1, col=1
-                    )
+                            line=dict(color=SOFT_AMBER, width=3),
+                            marker=dict(size=7, line=dict(color="white", width=1))
+                        ), row=1, col=1, secondary_y=True)
 
-                    # Configure secondary axis
-                    analysis_fig.update_layout(
-                        yaxis2=dict(
-                            title="Avg Rate ($)",
-                            overlaying="y",
-                            side="right",
-                            showgrid=False
-                        )
-                    )
+                    analysis_fig.update_yaxes(title_text="Revenue ($)", tickformat="$,.0f", row=1, col=1)
+                    analysis_fig.update_yaxes(title_text="ADR ($)", secondary_y=True, row=1, col=1)
 
-                # Performance Metrics
-                metrics_data = df.groupby("date").agg({
-                    "occupancy": "mean",
-                    "rate": "mean",
-                    "revpar": "mean"
-                }).reset_index()
+                # Performance Metrics: Occupancy (primary) + ADR & RevPAR (secondary)
+                if "date" in df.columns and ("occupancy" in df.columns or "rate" in df.columns or "revpar" in df.columns):
+                    met = df.groupby("date").agg(
+                        occupancy=("occupancy", "mean") if "occupancy" in df.columns else ("date", "count"),
+                        rate=("rate", "mean") if "rate" in df.columns else ("date", "count"),
+                        revpar=("revpar", "mean") if "revpar" in df.columns else ("date", "count")
+                    ).reset_index()
 
-                analysis_fig.add_trace(
-                    go.Scatter(
-                        x=metrics_data["date"],
-                        y=metrics_data["occupancy"],
-                        name="Occupancy",
-                        mode="lines",
-                        line=dict(color="#10b981", width=3),
-                        yaxis="y3"
-                    ),
-                    row=2, col=1
+                    if "occupancy" in df.columns:
+                        analysis_fig.add_trace(go.Scatter(
+                            x=met["date"], y=met["occupancy"] * 100, name="Occupancy (%)",
+                            mode="lines", line=dict(color=SOFT_TEAL, width=3)
+                        ), row=2, col=1, secondary_y=False)
+
+                    if "rate" in df.columns:
+                        analysis_fig.add_trace(go.Scatter(
+                            x=met["date"], y=met["rate"], name="ADR",
+                            mode="lines", line=dict(color=SOFT_BLUE, width=3)
+                        ), row=2, col=1, secondary_y=True)
+
+                    if "revpar" in df.columns:
+                        analysis_fig.add_trace(go.Scatter(
+                            x=met["date"], y=met["revpar"], name="RevPAR",
+                            mode="lines", line=dict(color=SOFT_LILAC, width=3)
+                        ), row=2, col=1, secondary_y=True)
+
+                    analysis_fig.update_yaxes(title_text="Occupancy (%)", secondary_y=False, row=2, col=1)
+                    analysis_fig.update_yaxes(title_text="ADR / RevPAR ($)", secondary_y=True, row=2, col=1)
+
+                _apply_soft_layout(analysis_fig, "Detailed Revenue Analysis", height=780)
+
+                # Insight
+                if "revpar" in df.columns:
+                    met2 = df.groupby("date")["revpar"].mean()
+                    if len(met2) > 1 and met2.iloc[0] != 0:
+                        revpar_change = (met2.iloc[-1] / met2.iloc[0] - 1) * 100
+                        trend = "increasing" if revpar_change > 0 else "decreasing"
+                        perf = _classify_performance(abs(revpar_change))
+                    else:
+                        revpar_change, trend, perf = 0, "flat", "weak"
+                else:
+                    revpar_change, trend, perf = 0, "flat", "weak"
+
+                analysis_expl = (
+                    f"RevPAR shows a **{perf} {trend}** trend ({revpar_change:.1f}%). "
+                    f"Average occupancy **{avg_occ:.1f}%** and ADR **${avg_rate:.2f}**."
                 )
 
-                analysis_fig.add_trace(
-                    go.Scatter(
-                        x=metrics_data["date"],
-                        y=metrics_data["rate"],
-                        name="ADR",
-                        mode="lines",
-                        line=dict(color="#3b82f6", width=3),
-                        yaxis="y4"
-                    ),
-                    row=2, col=1
-                )
-
-                analysis_fig.add_trace(
-                    go.Scatter(
-                        x=metrics_data["date"],
-                        y=metrics_data["revpar"],
-                        name="RevPAR",
-                        mode="lines",
-                        line=dict(color="#8b5cf6", width=3),
-                        yaxis="y5"
-                    ),
-                    row=2, col=1
-                )
-
-                # Configure axes
-                analysis_fig.update_layout(
-                    yaxis3=dict(title="Occupancy", showgrid=True),
-                    yaxis4=dict(
-                        title="ADR ($)",
-                        overlaying="y3",
-                        side="right",
-                        showgrid=False,
-                        anchor="free",
-                        position=0.85
-                    ),
-                    yaxis5=dict(
-                        title="RevPAR ($)",
-                        overlaying="y3",
-                        side="right",
-                        showgrid=False,
-                        anchor="free",
-                        position=0.95
-                    )
-                )
-
-                # Update layout
-                analysis_fig.update_layout(
-                    height=800,
-                    title_text="Detailed Revenue Analysis",
-                    title_font_size=18,
-                    title_x=0.5,
-                    showlegend=True,
-                    hovermode="x unified",
-                    template="plotly_white"
-                )
-
-                analysis_tab.layout().addWidget(_plotly_view(analysis_fig))
-
-                # Create explanation text for detailed analysis
-                revpar_trend = "increasing" if metrics_data["revpar"].iloc[-1] > metrics_data["revpar"].iloc[0] else "decreasing"
-                revpar_change = ((metrics_data["revpar"].iloc[-1] / metrics_data["revpar"].iloc[0]) - 1) * 100 if len(metrics_data) > 1 else 0
-                revpar_performance = _classify_performance(abs(revpar_change))
-
-                analysis_explanation = (
-                    f"Detailed analysis shows a {revpar_performance} {revpar_trend} trend in RevPAR "
-                    f"({revpar_change:.1f}% {revpar_trend}) over the period. "
-                    f"RevPAR is calculated as Average Daily Rate (ADR) × Occupancy rate.\n\n"
-                    f"Occupancy averages {avg_occupancy:.1f}% with ADR of ${avg_rate:.2f}. "
-                )
-
-                if "room_type" in df.columns:
-                    top_room = room_revenue.iloc[room_revenue["calculated_revenue"].argmax()]["room_type"]
-                    highest_rate = room_rates["rate"].max()
-                    highest_rate_room = room_rates.iloc[room_rates["rate"].argmax()]["room_type"]
-
-                    analysis_explanation += (
-                        f"The '{top_room}' room type generates the most revenue, while '{highest_rate_room}' "
-                        f"commands the highest rate at ${highest_rate:.2f}."
-                    )
-
-                analysis_tab.layout().addWidget(_collapsible(analysis_explanation))
+                analysis_tab.layout().addWidget(_card_wrap(_plotly_view(analysis_fig)))
+                analysis_tab.layout().addWidget(_collapsible(analysis_expl))
                 content.addTab(analysis_tab, "Detailed Analysis")
 
                 # ========================
@@ -656,124 +554,86 @@ def display() -> QWidget:
                 forecast_tab = QWidget()
                 forecast_tab.setLayout(QVBoxLayout())
 
-                # Create forecast figure
                 forecast_fig = go.Figure()
-
-                # Generate forecast data (synthetic for demo)
-                if len(daily_data) > 5:
-                    # Simple linear forecast for demo
-                    last_date = daily_data["date"].max()
+                if "calculated_revenue" in daily.columns and len(daily) >= 5:
+                    last_date = daily["date"].max()
                     forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=7)
 
-                    # Create trend line
-                    x = np.arange(len(daily_data))
-                    y = daily_data["calculated_revenue"].values
+                    x = np.arange(len(daily))
+                    y = daily["calculated_revenue"].values
                     z = np.polyfit(x, y, 1)
                     p = np.poly1d(z)
+                    fc_vals = p(np.arange(len(daily), len(daily) + 7))
 
-                    forecast_values = p(np.arange(len(daily_data), len(daily_data)+6))
+                    forecast_fig.add_trace(go.Scatter(
+                        x=daily["date"], y=daily["calculated_revenue"],
+                        name="Actual Revenue", mode="lines+markers",
+                        line=dict(color=SOFT_BLUE, width=3)
+                    ))
+                    forecast_fig.add_trace(go.Scatter(
+                        x=forecast_dates, y=fc_vals,
+                        name="Forecast", mode="lines+markers",
+                        line=dict(color=SOFT_RED, width=3, dash="dot")
+                    ))
+                    _apply_soft_layout(forecast_fig, "7-Day Revenue Forecast")
 
-                    # Add actual data
-                    forecast_fig.add_trace(
-                        go.Scatter(
-                            x=daily_data["date"],
-                            y=daily_data["calculated_revenue"],
-                            name="Actual Revenue",
-                            mode="lines+markers",
-                            line=dict(color="#3b82f6", width=3)
-                        )
+                    # Insight
+                    fc_trend = "increasing" if fc_vals[-1] > fc_vals[0] else "decreasing"
+                    base = daily["calculated_revenue"].iloc[-1] if daily["calculated_revenue"].iloc[-1] != 0 else 1
+                    fc_change = (fc_vals[-1] / base - 1) * 100
+                    fc_strength = _classify_performance(abs(fc_change))
+                    total_fc = float(np.sum(fc_vals))
+                    fc_profit = total_fc * (profit_margin / 100)
+
+                    forecast_expl = (
+                        f"Projected **{fc_trend}** trend over 7 days (**{fc_strength}**, {fc_change:.1f}%). "
+                        f"Total forecasted revenue ≈ **${total_fc:,.0f}**, "
+                        f"expected profit ≈ **${fc_profit:,.0f}** (margin {profit_margin:.1f}%)."
                     )
 
-                    # Add forecast
-                    forecast_fig.add_trace(
-                        go.Scatter(
-                            x=forecast_dates,
-                            y=forecast_values[-7:],
-                            name="Forecast",
-                            mode="lines+markers",
-                            line=dict(color="#ef4444", width=3, dash="dot")
-                        )
-                    )
-
-                    # Update layout
-                    forecast_fig.update_layout(
-                        height=500,
-                        title="7-Day Revenue Forecast",
-                        title_font_size=18,
-                        title_x=0.5,
-                        xaxis_title="Date",
-                        yaxis_title="Revenue ($)",
-                        template="plotly_white"
-                    )
-
-                    forecast_tab.layout().addWidget(_plotly_view(forecast_fig))
-
-                    # Create explanation text for forecast
-                    forecast_trend = "increasing" if forecast_values[-1] > forecast_values[0] else "decreasing"
-                    forecast_change = ((forecast_values[-1] / daily_data["calculated_revenue"].iloc[-1]) - 1) * 100
-                    trend_strength = _classify_performance(abs(forecast_change))
-
-                    # Calculate 7-day total forecast
-                    total_forecast = sum(forecast_values[-7:])
-                    # forecast_margin = profit_margin  # Assuming same profit margin
-                    forecast_profit = total_forecast * (profit_margin / 100)
-
-                    forecast_explanation = (
-                        f"The 7-day forecast shows a {trend_strength} {forecast_trend} trend with "
-                        f"a projected {forecast_change:.1f}% {forecast_trend} in daily revenue. "
-                        f"Total forecasted revenue is ${total_forecast:,.0f} with projected profit "
-                        f"of ${forecast_profit:,.0f} (assuming consistent {profit_margin:.1f}% profit margin).\n\n"
-                        f"This trend analysis is based on historical performance and may be influenced by "
-                        f"seasonality, events, or other external factors not captured in the model."
-                    )
-
-                    forecast_tab.layout().addWidget(_collapsible(forecast_explanation))
+                    forecast_tab.layout().addWidget(_card_wrap(_plotly_view(forecast_fig)))
+                    forecast_tab.layout().addWidget(_collapsible(forecast_expl))
+                    content.addTab(forecast_tab, "Forecast")
+                else:
+                    nof = QWidget()
+                    lnf = QVBoxLayout(nof)
+                    lnf.addWidget(QLabel("Not enough data to build a forecast."), 0, Qt.AlignCenter)
+                    forecast_tab.layout().addWidget(_card_wrap(nof))
                     content.addTab(forecast_tab, "Forecast")
 
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-
                 error_widget = QWidget()
-                error_layout = QVBoxLayout(error_widget)
-                error_label = QLabel(f"Error: {str(e)}")
-                error_label.setStyleSheet("color: red;")
-                error_layout.addWidget(error_label)
+                lay = QVBoxLayout(error_widget)
+                lbl = QLabel(f"Error: {str(e)}")
+                lbl.setStyleSheet("color: red;")
+                lay.addWidget(lbl, 0, Qt.AlignCenter)
                 content.addTab(error_widget, "Error")
 
-        # Connect Apply button
         apply_btn.clicked.connect(render)
-
-        # Initial render
         render()
 
-        # Expose refresh_date_pickers for data sync
-        display.refresh_date_pickers = refresh_date_pickers
+        # exposer pour resync externe
+        display.refresh_date_pickers = refresh_date_pickers  # type: ignore
 
         return root
+
     except Exception as e:
-        # Catch any errors and return a widget with an error message
         import traceback
         traceback.print_exc()
-
         error_widget = QWidget()
         error_layout = QVBoxLayout(error_widget)
         error_label = QLabel(f"Error loading Revenue View: {str(e)}")
         error_label.setStyleSheet("color: red; font-size: 14pt;")
         error_layout.addWidget(error_label, alignment=Qt.AlignCenter)
-
         return error_widget
 
 
-# Add this debugging code to identify the issue
+# Debug helper
 def debug_view_loading():
     try:
-        # Replace this with your actual view loading code
-        revenue_view_function = display  # Reference to the display function
-        if revenue_view_function is None:
-            print("ERROR: Revenue view function is None!")
-            return
-        revenue_view_function()
+        display()
     except Exception as e:
         print(f"Error loading revenue view: {e}")
         import traceback
