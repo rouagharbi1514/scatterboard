@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QSpinBox,
     QCheckBox, QGroupBox, QPushButton, QFrame, QSizePolicy,
-    QScrollArea
+    QScrollArea, QGraphicsDropShadowEffect
 )
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QColor, QPalette
@@ -30,72 +30,61 @@ ROOM_TYPES: List[str] = []
 
 
 def _collapsible(text: str) -> QWidget:
-    """Create a collapsible explanation panel.
-
-    Args:
-        text: The explanation text to display
-
-    Returns:
-        A widget containing a toggle button and collapsible text panel
-    """
+    """Create a collapsible explanation panel (UI only)."""
     container = QWidget()
     container.setStyleSheet("""
         QWidget {
-            background-color: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            margin: 5px 0;
+            background-color: #FFFFFF;
+            border: 1px solid #E6EAF1;
+            border-radius: 12px;
+            margin: 6px 0;
         }
     """)
     layout = QVBoxLayout(container)
-    layout.setContentsMargins(10, 8, 10, 8)
+    layout.setContentsMargins(12, 10, 12, 10)
     layout.setSpacing(8)
 
-    # Toggle button
     toggle_btn = QPushButton("📋 Show explanation")
+    toggle_btn.setCursor(Qt.PointingHandCursor)
     toggle_btn.setStyleSheet("""
         QPushButton {
-            background-color: #27ae60;
-            color: white;
-            padding: 8px 15px;
-            border-radius: 6px;
-            font-weight: bold;
-            font-size: 11pt;
-            border: none;
+            background: #F2F6FF;
+            color: #0F172A;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 12px;
+            border: 1px solid #D8E3F5;
             text-align: left;
         }
-        QPushButton:hover { background-color: #229954; }
-        QPushButton:pressed { background-color: #1e8449; }
+        QPushButton:hover { background: #EAF0FF; }
+        QPushButton:pressed { background: #E0E8FF; }
     """)
 
-    # Explanation label with improved styling
     explanation = QLabel(text)
     explanation.setWordWrap(True)
     explanation.setStyleSheet("""
         QLabel {
-            background-color: rgba(39, 174, 96, 0.1);
-            color: #2c3e50;
-            padding: 15px;
-            border-radius: 6px;
-            font-size: 11pt;
-            line-height: 1.5;
-            border: 1px solid rgba(39, 174, 96, 0.3);
+            background: #FAFCFF;
+            color: #334155;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            line-height: 1.55;
+            border: 1px solid #E6EAF1;
         }
     """)
     explanation.setVisible(False)
 
-    # Add widgets to layout
     layout.addWidget(toggle_btn)
     layout.addWidget(explanation)
 
-    # Connect toggle button
     def toggle_explanation():
         is_visible = explanation.isVisible()
         explanation.setVisible(not is_visible)
         toggle_btn.setText("📋 Hide explanation" if not is_visible else "📋 Show explanation")
 
     toggle_btn.clicked.connect(toggle_explanation)
-
     return container
 
 
@@ -106,123 +95,160 @@ class WhatIfPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Set a modern background
+        # Modern background (soft gradients) — UI only
+        self.setObjectName("whatIfRoot")
         self.setAutoFillBackground(True)
         palette = self.palette()
-        palette.setColor(QPalette.Window, QColor("#f0f2f5"))
+        palette.setColor(QPalette.Window, QColor("#F6F8FC"))
         self.setPalette(palette)
+
+        # Global, modern QSS
+        self.setStyleSheet("""
+            #whatIfRoot {
+                background:
+                    radial-gradient(560px 380px at 3% 5%, #EEF4FF 0%, transparent 60%),
+                    radial-gradient(620px 420px at 100% 98%, #F8FBFF 0%, transparent 60%),
+                    #F6F8FC;
+                font-family: "Inter","Segoe UI", Arial;
+                color: #0F172A;
+            }
+
+            /* Title */
+            #titleLabel {
+                font-size: 22px;
+                font-weight: 800;
+                letter-spacing: .2px;
+                color: #0F172A;
+            }
+
+            /* Accent divider */
+            #titleAccent {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 #2563EB, stop:1 #5B7CFF);
+                border-radius: 2px;
+            }
+
+            /* Cards / groups */
+            QGroupBox {
+                background: #FFFFFF;
+                border: 1px solid #E6EAF1;
+                border-radius: 14px;
+                margin-top: 12px;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                padding: 2px 8px;
+                margin-left: 8px;
+                color: #1E293B;
+                background: #EFF4FF;
+                border: 1px solid #DFE8FF;
+                border-radius: 8px;
+                font-weight: 700;
+                font-size: 12px;
+            }
+
+            /* Labels */
+            .muted { color: #475569; font-size: 12px; }
+
+            /* Sliders */
+            QSlider::groove:horizontal {
+                height: 6px; border-radius: 4px;
+                background: #E7EEF9;
+                margin: 8px 0;
+            }
+            QSlider::handle:horizontal {
+                background: #2563EB;
+                width: 18px; height: 18px;
+                border: 2px solid #FFFFFF;
+                border-radius: 9px;
+                margin: -7px 0;
+            }
+            QSlider::sub-page:horizontal { background: #93C5FD; border-radius: 4px; }
+
+            /* SpinBox */
+            QSpinBox {
+                background: #FFFFFF; color: #0F172A;
+                border: 1px solid #D8E3F5; border-radius: 10px;
+                padding: 5px 6px; min-width: 72px; height: 30px; font-weight: 700;
+            }
+            QSpinBox::up-button, QSpinBox::down-button {
+                width: 18px; border: 1px solid #D8E3F5; border-radius: 6px;
+                background: #EFF4FF;
+            }
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: #EAF0FF; }
+
+            /* CheckBox */
+            QCheckBox { font-size: 12px; color: #0F172A; }
+            QCheckBox::indicator {
+                width: 16px; height: 16px;
+                border: 1px solid #CFDAEC; border-radius: 4px;
+                background: #FFFFFF;
+            }
+            QCheckBox::indicator:checked {
+                background: #2563EB;
+                image: none;
+            }
+
+            /* ScrollArea */
+            QScrollArea {
+                border: 1px solid #E6EAF1;
+                background-color: transparent;
+                border-radius: 12px;
+            }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 12px; margin: 2px;
+            }
+            QScrollBar::handle:vertical {
+                background: #CBD8EE; border-radius: 6px; min-height: 24px;
+            }
+            QScrollBar::handle:vertical:hover { background: #B8C9EA; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        """)
 
         # Main layout for the widget
         main_wrapper_layout = QVBoxLayout(self)
-        main_wrapper_layout.setContentsMargins(5, 5, 5, 5)
+        main_wrapper_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Create scroll area with enhanced styling
+        # Scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #ddd;
-                background-color: #f9f9f9;
-                border-radius: 4px;
-            }
-            QScrollBar:vertical {
-                background-color: #f0f2f5;
-                width: 14px;
-                border-radius: 7px;
-                border: 1px solid #ddd;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #3498db;
-                border-radius: 6px;
-                min-height: 25px;
-                margin: 1px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #2980b9;
-            }
-            QScrollBar::handle:vertical:pressed {
-                background-color: #1f4e79;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background-color: transparent;
-            }
-        """)
 
-        # Create content widget for the scroll area
+        # Content widget for the scroll area
         content_widget = QWidget()
         scroll_area.setWidget(content_widget)
 
         # Main content layout
         main_layout = QVBoxLayout(content_widget)
-        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setContentsMargins(16, 16, 16, 16)
         main_layout.setSpacing(12)
 
-        # Title - compact and modern
+        # Title + accent
         title = QLabel("What-If Turbo Simulation")
-        title.setStyleSheet("""
-            font-size: 18pt;
-            font-weight: bold;
-            color: #2c3e50;
-            padding: 6px 0;
-            border-bottom: 2px solid #3498db;
-            margin-bottom: 8px;
-        """)
+        title.setObjectName("titleLabel")
         title.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title)
 
-        # Top section: Controls and KPIs - improved layout
+        accent = QFrame()
+        accent.setObjectName("titleAccent")
+        accent.setFixedHeight(3)
+        main_layout.addWidget(accent)
+
+        # Top section: Controls and KPIs
         top_section_layout = QHBoxLayout()
         top_section_layout.setSpacing(12)
 
-        # Controls area - more compact
+        # Controls area (card)
         controls_group = QGroupBox("Scenario Controls")
-        controls_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 11pt;
-                font-weight: bold;
-                color: #2980b9;
-                border: 2px solid #aaddff;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding: 8px;
-                background-color: #ffffff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-                padding: 0 6px;
-                background-color: #eaf6ff;
-                border-radius: 4px;
-            }
-        """)
-        controls_group.setMaximumWidth(380)
         controls_layout = QVBoxLayout(controls_group)
         controls_layout.setSpacing(8)
+        self._apply_card_shadow(controls_group)
 
         # Room Rate Sliders
         rate_group = QGroupBox("Room Rate Adjustments (SAR)")
-        rate_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 10pt;
-                font-weight: bold;
-                color: #3498db;
-                border: 1px solid #cceeff;
-                border-radius: 6px;
-                margin-top: 8px;
-                padding: 6px;
-                background-color: #f8fcff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 5px;
-            }
-        """)
         rate_layout = QVBoxLayout(rate_group)
         rate_layout.setSpacing(6)
 
@@ -230,7 +256,7 @@ class WhatIfPanel(QWidget):
         for room_type in ["Standard", "Deluxe", "Suite", "Presidential"]:
             slider_layout = QHBoxLayout()
             label = QLabel(f"{room_type}:")
-            label.setStyleSheet("font-size: 11pt; font-weight: 500; min-width: 90px; color: #333;")
+            label.setStyleSheet("font-size: 12px; font-weight: 600; min-width: 90px; color: #0F172A;")
             slider_layout.addWidget(label)
 
             slider = QSlider(Qt.Horizontal)
@@ -238,31 +264,11 @@ class WhatIfPanel(QWidget):
             slider.setValue(0)
             slider.setTickPosition(QSlider.TicksBelow)
             slider.setTickInterval(10)
-            slider.setFixedWidth(200)
-            slider.setStyleSheet("""
-                QSlider::groove:horizontal {
-                    border: 1px solid #c0c0c0;
-                    height: 8px;
-                    background: #e0e0e0;
-                    margin: 2px 0;
-                    border-radius: 4px;
-                }
-                QSlider::handle:horizontal {
-                    background: #3498db;
-                    border: 1px solid #2980b9;
-                    width: 18px;
-                    margin: -5px 0;
-                    border-radius: 9px;
-                }
-                QSlider::sub-page:horizontal {
-                    background: #3498db;
-                    border-radius: 4px;
-                }
-            """)
+            slider.setFixedWidth(220)
             slider.valueChanged.connect(self._on_control_changed)
 
             value_label = QLabel("0 SAR")
-            value_label.setStyleSheet("font-size: 11pt; font-weight: bold; min-width: 50px; color: #2c3e50;")
+            value_label.setStyleSheet("font-size: 12px; font-weight: 800; min-width: 60px; color: #111827;")
 
             slider_layout.addWidget(slider)
             slider_layout.addWidget(value_label)
@@ -274,23 +280,6 @@ class WhatIfPanel(QWidget):
 
         # Occupancy slider
         occ_group = QGroupBox("Target Occupancy (%)")
-        occ_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 12pt;
-                font-weight: bold;
-                color: #3498db;
-                border: 1px solid #cceeff;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding: 10px;
-                background-color: #f8fcff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 6px;
-            }
-        """)
         occ_layout = QHBoxLayout(occ_group)
         occ_layout.setSpacing(10)
 
@@ -299,56 +288,19 @@ class WhatIfPanel(QWidget):
         self.occ_slider.setValue(80)
         self.occ_slider.setTickPosition(QSlider.TicksBelow)
         self.occ_slider.setTickInterval(5)
-        self.occ_slider.setFixedWidth(200)
-        self.occ_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #c0c0c0;
-                height: 8px;
-                background: #e0e0e0;
-                margin: 2px 0;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #3498db;
-                border: 1px solid #2980b9;
-                width: 18px;
-                margin: -5px 0;
-                border-radius: 9px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #3498db;
-                border-radius: 4px;
-            }
-        """)
+        self.occ_slider.setFixedWidth(220)
         self.occ_slider.valueChanged.connect(self._on_control_changed)
 
         self.occ_label = QLabel("80%")
-        self.occ_label.setStyleSheet("font-size: 11pt; font-weight: bold; min-width: 50px; color: #2c3e50;")
+        self.occ_label.setStyleSheet("font-size: 12px; font-weight: 800; min-width: 50px; color: #111827;")
 
         occ_layout.addWidget(self.occ_slider)
         occ_layout.addWidget(self.occ_label)
 
         controls_layout.addWidget(occ_group)
 
-        # Staffing controls - more compact
+        # Staffing controls
         staff_group = QGroupBox("Staffing Levels (FTE)")
-        staff_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 10pt;
-                font-weight: bold;
-                color: #3498db;
-                border: 1px solid #cceeff;
-                border-radius: 6px;
-                margin-top: 8px;
-                padding: 6px;
-                background-color: #f8fcff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 5px;
-            }
-        """)
         staff_layout = QVBoxLayout(staff_group)
         staff_layout.setSpacing(6)
 
@@ -356,7 +308,7 @@ class WhatIfPanel(QWidget):
         for dept in ["Housekeeping", "F&B"]:
             staff_row = QHBoxLayout()
             label = QLabel(f"{dept}:")
-            label.setStyleSheet("font-size: 11pt; font-weight: 500; min-width: 90px; color: #333;")
+            label.setStyleSheet("font-size: 12px; font-weight: 600; min-width: 90px; color: #0F172A;")
             staff_row.addWidget(label)
 
             spinbox = QSpinBox()
@@ -364,28 +316,6 @@ class WhatIfPanel(QWidget):
             spinbox.setValue(0)
             spinbox.setPrefix("+" if spinbox.value() >= 0 else "")
             spinbox.setSuffix(" FTE")
-            spinbox.setStyleSheet("""
-                QSpinBox {
-                    font-size: 11pt;
-                    font-weight: bold;
-                    min-width: 70px;
-                    height: 28px;
-                    border: 1px solid #cceeff;
-                    border-radius: 5px;
-                    padding-left: 5px;
-                    background-color: #ffffff;
-                    color: #2c3e50;
-                }
-                QSpinBox::up-button, QSpinBox::down-button {
-                    width: 20px;
-                    border: 1px solid #cceeff;
-                    border-radius: 3px;
-                    background-color: #eaf6ff;
-                }
-                QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-                    background-color: #d8edff;
-                }
-            """)
             spinbox.valueChanged.connect(lambda v, sb=spinbox: sb.setPrefix("+" if v >= 0 else ""))
             spinbox.valueChanged.connect(self._on_control_changed)
 
@@ -395,25 +325,8 @@ class WhatIfPanel(QWidget):
 
         controls_layout.addWidget(staff_group)
 
-        # Promo checkboxes - more compact
+        # Promotions
         promo_group = QGroupBox("Promotional Bundles")
-        promo_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 10pt;
-                font-weight: bold;
-                color: #3498db;
-                border: 1px solid #cceeff;
-                border-radius: 6px;
-                margin-top: 8px;
-                padding: 6px;
-                background-color: #f8fcff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 5px;
-            }
-        """)
         promo_layout = QVBoxLayout(promo_group)
         promo_layout.setSpacing(4)
 
@@ -426,9 +339,7 @@ class WhatIfPanel(QWidget):
         ]:
             checkbox = QCheckBox(promo_name)
             checkbox.setChecked(False)
-            checkbox.setStyleSheet("font-size: 11pt; font-weight: 500; color: #333;")
             checkbox.stateChanged.connect(self._on_control_changed)
-
             self.promo_checkboxes[promo_id] = checkbox
             promo_layout.addWidget(checkbox)
 
@@ -437,31 +348,13 @@ class WhatIfPanel(QWidget):
 
         top_section_layout.addWidget(controls_group)
 
-        # Results area - more compact and refined
+        # Results area (card)
         results_group = QGroupBox("Financial Impact (30-day Outlook)")
-        results_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 11pt;
-                font-weight: bold;
-                color: #27ae60;
-                border: 2px solid #a8e6cf;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding: 8px;
-                background-color: #ffffff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-                padding: 0 6px;
-                background-color: #e6ffee;
-                border-radius: 4px;
-            }
-        """)
         results_layout = QVBoxLayout(results_group)
         results_layout.setSpacing(10)
+        self._apply_card_shadow(results_group)
 
-        # KPI tiles - horizontal layout for better space usage
+        # KPI tiles
         kpi_layout = QHBoxLayout()
         kpi_layout.setSpacing(10)
 
@@ -472,27 +365,27 @@ class WhatIfPanel(QWidget):
             kpi_frame = QFrame()
             kpi_frame.setFrameShape(QFrame.StyledPanel)
             kpi_frame.setLineWidth(1)
-            kpi_frame.setFixedSize(120, 70)
+            kpi_frame.setFixedSize(128, 76)
             kpi_frame.setStyleSheet("""
                 QFrame {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-                                                stop: 0 #e8f5e9, stop: 1 #ffffff);
-                    border: 2px solid #81c784;
-                    border-radius: 8px;
-                    padding: 4px;
+                    background: #FFFFFF;
+                    border: 1px solid #E6EAF1;
+                    border-radius: 14px;
+                    padding: 6px;
                 }
             """)
+            self._apply_card_shadow(kpi_frame, blur=22, y=6, alpha=36)
 
             kpi_layout_internal = QVBoxLayout(kpi_frame)
-            kpi_layout_internal.setContentsMargins(2, 2, 2, 2)
-            kpi_layout_internal.setSpacing(1)
+            kpi_layout_internal.setContentsMargins(6, 6, 6, 6)
+            kpi_layout_internal.setSpacing(2)
 
             title_label = QLabel(metric)
-            title_label.setStyleSheet("font-size: 8pt; font-weight: 600; color: #2e7d32;")
+            title_label.setStyleSheet("font-size: 10px; font-weight: 700; color: #475569;")
             title_label.setAlignment(Qt.AlignCenter)
 
             value_label = QLabel("--")
-            value_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #222; padding: 2px 0;")
+            value_label.setStyleSheet("font-size: 18px; font-weight: 800; color: #0F172A; padding: 2px 0;")
             value_label.setAlignment(Qt.AlignCenter)
 
             kpi_layout_internal.addWidget(title_label)
@@ -502,11 +395,9 @@ class WhatIfPanel(QWidget):
             kpi_layout.addWidget(kpi_frame)
 
         results_layout.addLayout(kpi_layout)
+        results_layout.addSpacing(6)
 
-        # Reduce spacing
-        results_layout.addSpacing(8)
-
-        # Waterfall chart placeholder - more compact
+        # Waterfall chart placeholder
         self.waterfall_chart = QWidget()
         self.waterfall_chart.setMinimumHeight(280)
         self.waterfall_chart.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -518,49 +409,42 @@ class WhatIfPanel(QWidget):
 
         main_layout.addLayout(top_section_layout)
 
-        # Add explanation after the main content for better flow
+        # Explanation
         explanation_text = (
             "**What-If Turbo Simulation** - Test different scenarios and see their financial impact instantly.\n\n"
-
             "**💰 Key Metrics Explained:**\n"
             "• **RevPAR** (Revenue per Available Room) = Total Revenue ÷ Total Available Rooms\n"
             "• **GOPPAR** (Gross Operating Profit per Available Room) = Gross Operating Profit ÷ Total Available Rooms\n"
             "• **Revenue/Cost/Profit** show percentage changes from your baseline performance\n\n"
-
             "**🎯 How to Use:**\n"
             "• **Room Rates**: Adjust prices by ±50 SAR for each room type\n"
             "• **Occupancy**: Set target occupancy between 50-100%\n"
             "• **Staffing**: Modify housekeeping/F&B staff by ±5 FTE\n"
             "• **Promotions**: Select promotional bundles to activate\n\n"
-
             "**📊 Reading Results:**\n"
             "• **Green percentages** = Positive impact on performance\n"
             "• **Red percentages** = Negative impact requiring consideration\n"
             "• All projections are based on 30-day outlook for strategic planning"
         )
         explanation_widget = _collapsible(explanation_text)
-        explanation_widget.setContentsMargins(5, 5, 5, 5)
+        explanation_widget.setContentsMargins(4, 4, 4, 4)
         main_layout.addWidget(explanation_widget)
 
-        # Add bottom padding and scroll hint
+        # Bottom hint
         bottom_hint = QLabel("📊 Scroll up/down to see all controls and results")
+        bottom_hint.setAlignment(Qt.AlignCenter)
         bottom_hint.setStyleSheet("""
             QLabel {
-                background-color: #e8f4fd;
-                color: #2980b9;
-                padding: 8px;
-                border-radius: 4px;
-                font-size: 9pt;
-                font-style: italic;
-                text-align: center;
-                border: 1px solid #d4e6f1;
+                background: #EFF6FF;
+                color: #1E40AF;
+                padding: 8px 10px;
+                border-radius: 10px;
+                font-size: 11px;
+                border: 1px solid #DFE8FF;
             }
         """)
-        bottom_hint.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(bottom_hint)
-
-        # Add some bottom spacing
-        main_layout.addSpacing(20)
+        main_layout.addSpacing(14)
 
         # Add scroll area to main wrapper
         main_wrapper_layout.addWidget(scroll_area)
@@ -571,23 +455,28 @@ class WhatIfPanel(QWidget):
         # Load matrix (synchronous)
         self._load_elasticity_matrix()
 
+    # --- UI helper (ombre douce) ---
+    def _apply_card_shadow(self, widget: QWidget, blur: int = 24, y: int = 8, alpha: int = 42):
+        effect = QGraphicsDropShadowEffect(widget)
+        effect.setBlurRadius(blur)
+        effect.setOffset(0, y)
+        effect.setColor(QColor(0, 0, 0, alpha))
+        widget.setGraphicsEffect(effect)
+
     def _load_elasticity_matrix(self) -> None:
         """Load elasticity matrix with fallback to default values"""
         global ELASTICITY_MATRIX, BASELINE_DATA, ROOM_TYPES
 
-        # Use default values for demonstration
         ROOM_TYPES = ["Standard", "Deluxe", "Suite", "Presidential"]
 
-        # Create a realistic elasticity matrix (room_types x metrics)
-        # Metrics: base_rate, occupancy_elasticity, revenue_impact, cost_impact
+        # base_rate, occupancy_elasticity, revenue_impact, cost_impact
         ELASTICITY_MATRIX = np.array([
-            [400, 0.8, 1.0, 0.5],  # Standard
-            [600, 0.7, 1.2, 0.6],  # Deluxe
-            [900, 0.6, 1.5, 0.7],  # Suite
+            [400, 0.8, 1.0, 0.5],   # Standard
+            [600, 0.7, 1.2, 0.6],   # Deluxe
+            [900, 0.6, 1.5, 0.7],   # Suite
             [1500, 0.5, 2.0, 0.8],  # Presidential
         ])
 
-        # Default baseline data with realistic hotel values in SAR
         BASELINE_DATA = {
             "occupancy": 75,
             "revenue": 450000,
@@ -606,38 +495,31 @@ class WhatIfPanel(QWidget):
             }
         }
 
-        # Set initial occupancy to baseline
         if hasattr(self, 'occ_slider'):
             self.occ_slider.setValue(BASELINE_DATA["occupancy"])
 
-        # Run initial calculation
         self._on_control_changed()
 
     @Slot()
     def _on_control_changed(self) -> None:
         """Handle any control value change and update UI labels."""
-        # Debounce to avoid recalculating too frequently
         if not hasattr(self, "_last_update"):
             self._last_update = 0
         import time
         current_time = time.time()
-        if current_time - self._last_update < 0.1:  # 100ms debounce
+        if current_time - self._last_update < 0.1:
             return
         self._last_update = current_time
 
-        # Update room rate labels
         for room_type, (slider, label) in self.room_sliders.items():
             value = slider.value()
             label.setText(f"{value:+d} SAR")
 
-        # Update occupancy label
         self.occ_label.setText(f"{self.occ_slider.value()}%")
 
-        # Update spinbox prefixes
-        for dept, spinbox in self.staff_spinboxes.items():
+        for _, spinbox in self.staff_spinboxes.items():
             spinbox.setPrefix("+" if spinbox.value() >= 0 else "")
 
-        # Calculate impact and update KPIs
         if ELASTICITY_MATRIX is not None and BASELINE_DATA is not None:
             try:
                 scenario = self._get_current_scenario()
@@ -645,15 +527,12 @@ class WhatIfPanel(QWidget):
                 if results:
                     self._update_results_display(results)
                 else:
-                    print("Warning: _local_calc returned None")
-                    # Set default values
                     for widget in self.kpi_widgets.values():
                         widget.setText("--")
             except Exception as e:
                 print(f"Error in _on_control_changed: {e}")
                 import traceback
                 traceback.print_exc()
-                # Set error values
                 for widget in self.kpi_widgets.values():
                     widget.setText("ERROR")
         else:
@@ -661,24 +540,10 @@ class WhatIfPanel(QWidget):
 
     def _get_current_scenario(self) -> Dict:
         """Get current values from all controls"""
-        # Room rates
-        rates = {}
-        for room_type, (slider, _) in self.room_sliders.items():
-            rates[room_type] = slider.value()
-
-        # Occupancy
+        rates = {room_type: slider.value() for room_type, (slider, _) in self.room_sliders.items()}
         occupancy = self.occ_slider.value()
-
-        # Staffing
-        staffing = {}
-        for dept, spinbox in self.staff_spinboxes.items():
-            staffing[dept] = spinbox.value()
-
-        # Promotions
-        promotions = []
-        for promo_id, checkbox in self.promo_checkboxes.items():
-            if checkbox.isChecked():
-                promotions.append(promo_id)
+        staffing = {dept: sb.value() for dept, sb in self.staff_spinboxes.items()}
+        promotions = [pid for pid, cb in self.promo_checkboxes.items() if cb.isChecked()]
 
         return {
             "rates": rates,
@@ -689,8 +554,7 @@ class WhatIfPanel(QWidget):
         }
 
     def _local_calc(self, scenario: Dict) -> Dict:
-        """Perform realistic financial impact calculation"""
-        # Get baseline values
+        """Perform realistic financial impact calculation (unchanged logic)"""
         baseline_revenue = BASELINE_DATA["total_revenue"]
         baseline_cost = BASELINE_DATA["total_cost"]
         baseline_profit = BASELINE_DATA["net_profit"]
@@ -700,58 +564,45 @@ class WhatIfPanel(QWidget):
         room_counts = BASELINE_DATA["room_counts"]
         total_rooms = sum(room_counts.values())
 
-        # Initialize impact trackers
         revenue_impact = 0
-        cost_impact = 0
         occupancy_change = scenario["occupancy"] - baseline_occupancy
 
-        # Calculate room revenue impacts with elasticity
         for i, room_type in enumerate(ROOM_TYPES):
             base_rate = ELASTICITY_MATRIX[i][0]
             elasticity = ELASTICITY_MATRIX[i][1]
             rate_change = scenario["rates"].get(room_type, 0)
-            
-            # Calculate demand change based on price elasticity
+
             demand_factor = 1 - (elasticity * (rate_change / base_rate))
             room_revenue = (base_rate + rate_change) * room_counts[room_type] * 30
             revenue_impact += room_revenue * demand_factor - (base_rate * room_counts[room_type] * 30)
 
-        # Occupancy impact (independent of price)
         occupancy_impact = occupancy_change * 0.01 * baseline_revenue
 
-        # Promotion impact
         promo_count = len(scenario["promotions"])
-        promo_cost = promo_count * 2000  # Base cost per promotion
+        promo_cost = promo_count * 2000
         promo_revenue_boost = 0.05 * baseline_revenue if promo_count > 0 else 0
         net_promo_impact = promo_revenue_boost - promo_cost
 
-        # Staffing impact with diminishing returns
         staff_changes = scenario["staffing"]
         hk_change = staff_changes.get("housekeeping", 0)
         fb_change = staff_changes.get("f&b", 0)
-        
-        # Cost per staff with efficiency factors
+
         hk_cost = 2500 * hk_change * (1 - 0.02 * max(0, hk_change))
         fb_cost = 3000 * fb_change * (1 - 0.015 * max(0, fb_change))
         staff_cost_impact = hk_cost + fb_cost
-        
-        # Staff efficiency impact on revenue
+
         staff_revenue_impact = 0.01 * baseline_revenue * (hk_change + fb_change)
 
-        # Total revenue impact
         total_revenue_impact = revenue_impact + occupancy_impact + net_promo_impact + staff_revenue_impact
-        total_cost_impact = staff_cost_impact - (0.3 * total_revenue_impact)  # Variable cost portion
-        
-        # Final values
+        total_cost_impact = staff_cost_impact - (0.3 * total_revenue_impact)
+
         final_revenue = baseline_revenue + total_revenue_impact
         final_cost = baseline_cost + total_cost_impact
         final_profit = final_revenue - final_cost
-        
-        # Calculate RevPAR and GOPPAR
+
         final_revpar = final_revenue / (total_rooms * 30)
         final_goppar = final_profit / (total_rooms * 30)
-        
-        # Calculate percentage changes
+
         deltas_percent = {
             "revpar": ((final_revpar - baseline_revpar) / baseline_revpar * 100) if baseline_revpar > 0 else 0,
             "goppar": ((final_goppar - baseline_goppar) / baseline_goppar * 100) if baseline_goppar > 0 else 0,
@@ -760,7 +611,6 @@ class WhatIfPanel(QWidget):
             "profit": ((final_profit - baseline_profit) / baseline_profit * 100) if baseline_profit > 0 else 0
         }
 
-        # Waterfall data
         waterfall_data = {
             "baseline": float(baseline_profit),
             "price": float(revenue_impact),
@@ -776,16 +626,13 @@ class WhatIfPanel(QWidget):
         }
 
     def _update_results_display(self, results: Dict) -> None:
-        """Update the UI with calculation results"""
+        """Update the UI with calculation results (UI only)"""
         if results is None:
-            # Clear displays or show error
             for widget in self.kpi_widgets.values():
                 widget.setText("--")
-            # Clear waterfall chart
             self.waterfall_chart = create_plotly_widget(go.Figure())
             return
 
-        # Update KPI tiles
         metrics = {
             "revpar": "RevPAR",
             "goppar": "GOPPAR",
@@ -794,37 +641,33 @@ class WhatIfPanel(QWidget):
             "profit": "Profit"
         }
 
-        for metric_key, display_name in metrics.items():
+        for metric_key, _ in metrics.items():
             widget = self.kpi_widgets[metric_key.lower()]
             delta_percent = results["deltas_percent"].get(metric_key, 0.0)
 
-            # Format text with colors
             color = self._get_impact_color(delta_percent, metric_key == "cost")
             formatted_value = f"{delta_percent:+.1f}%"
 
             widget.setText(formatted_value)
-            widget.setStyleSheet(f"font-size: 18pt; font-weight: bold; color: {color}; padding: 4px 0 2px 0;")
+            widget.setStyleSheet(f"font-size: 18px; font-weight: 800; color: {color}; padding: 2px 0;")
 
-        # Update waterfall chart
         self._update_waterfall_chart(results["waterfall"])
 
     def _get_impact_color(self, value: float, invert: bool = False) -> str:
         """Get color based on impact (green=good, red=bad)"""
         if abs(value) < 0.1:
-            return "#6c757d"  # Muted Gray
-
+            return "#64748B"  # Muted gray
         if invert:
-            value = -value  # For costs, negative is good
-
+            value = -value
         if value >= 5:
-            return "#28a745"  # Green
+            return "#16A34A"
         if value >= 1:
-            return "#20c997"  # Teal
+            return "#22C55E"
         if value <= -5:
-            return "#dc3545"  # Red
+            return "#DC2626"
         if value <= -1:
-            return "#fd7e14"  # Orange
-        return "#ffc107"  # Yellow
+            return "#F97316"
+        return "#EAB308"
 
     def _update_waterfall_chart(self, data: Dict) -> None:
         """Update the waterfall chart with new data"""
@@ -833,14 +676,7 @@ class WhatIfPanel(QWidget):
             orientation="v",
             measure=["absolute", "relative", "relative", "relative", "relative", "total"],
             x=["Baseline", "Price Impact", "Occupancy Impact", "Promotions", "Staffing", "Final"],
-            y=[
-                data["baseline"],
-                data["price"],
-                data["occupancy"],
-                data["promo"],
-                data["staff"],
-                data["final"]
-            ],
+            y=[data["baseline"], data["price"], data["occupancy"], data["promo"], data["staff"], data["final"]],
             text=[
                 f"{format_currency(data['baseline'])}",
                 f"{format_currency(data['price'], with_sign=True)}",
@@ -850,33 +686,29 @@ class WhatIfPanel(QWidget):
                 f"{format_currency(data['final'])}"
             ],
             textposition="outside",
-            connector={"line": {"color": "#6c757d", "dash": "dot"}},
-            decreasing={"marker": {"color": "#e74c3c", "line": {"color": "#c0392b", "width": 1}}},
-            increasing={"marker": {"color": "#2ecc71", "line": {"color": "#27ae60", "width": 1}}},
-            totals={"marker": {"color": "#3498db", "line": {"color": "#2980b9", "width": 1}}}
+            connector={"line": {"color": "#94A3B8", "dash": "dot"}},
+            decreasing={"marker": {"color": "#EF4444", "line": {"color": "#DC2626", "width": 1}}},
+            increasing={"marker": {"color": "#22C55E", "line": {"color": "#16A34A", "width": 1}}},
+            totals={"marker": {"color": "#2563EB", "line": {"color": "#1D4ED8", "width": 1}}}
         ))
 
         fig.update_layout(
             title_text="<b>Profit & Loss Impact (30 Days)</b>",
             title_font_size=16,
             showlegend=False,
-            height=350,
+            height=360,
             margin=dict(t=60, l=40, r=40, b=50),
-            plot_bgcolor='#f8f9fa',
-            paper_bgcolor='#ffffff',
-            font=dict(family="Arial, sans-serif", size=10, color="#343a40"),
+            plot_bgcolor='#F8FAFF',
+            paper_bgcolor='#FFFFFF',
+            font=dict(family="Arial, sans-serif", size=11, color="#0F172A"),
             xaxis_title="Impact Categories",
             yaxis_title="Amount (SAR)",
             hovermode="x unified"
         )
+        fig.add_hline(y=data["baseline"], line_dash="dot", line_color="#94A3B8")
 
-        # Add a horizontal line at baseline
-        fig.add_hline(y=data["baseline"], line_dash="dot", line_color="#7f8c8d")
-
-        # Update the widget
         new_chart = create_plotly_widget(fig)
 
-        # Replace the old waterfall chart widget with the new one
         try:
             parent_widget = self.waterfall_chart.parent()
             if parent_widget and hasattr(parent_widget, 'layout') and parent_widget.layout():
@@ -899,20 +731,17 @@ class WhatIfPanel(QWidget):
                 self.waterfall_chart.deleteLater()
 
         self.waterfall_chart = new_chart
-        self.waterfall_chart.setMinimumHeight(350)
+        self.waterfall_chart.setMinimumHeight(360)
         self.waterfall_chart.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     @Slot(dict)
     def _handle_fallback(self, scenario: Dict) -> None:
         """Handle server-side calculation for longer periods"""
-        # For now, just use local calculation as fallback
         self._fetch_server_calculation(scenario)
 
     def _fetch_server_calculation(self, scenario: Dict) -> None:
         """Simplified calculation without server dependency"""
         try:
-            # Use local calculation as fallback
-            print("Using local calculation fallback")
             result = self._local_calc(scenario)
             self._update_results_display(result)
         except Exception as e:
@@ -929,19 +758,18 @@ def display() -> QWidget:
         import traceback
         traceback.print_exc()
 
-        # Return a simple error widget as fallback
-        from PySide6.QtWidgets import QLabel, QVBoxLayout
+        # Fallback error widget (UI only)
         error_widget = QWidget()
         layout = QVBoxLayout(error_widget)
         error_label = QLabel(f"Error loading What-If Analysis: {str(e)}")
         error_label.setStyleSheet("""
             QLabel {
-                color: #e74c3c;
+                color: #DC2626;
                 font-size: 14pt;
                 padding: 20px;
-                background-color: #f8f9fa;
-                border: 2px solid #e74c3c;
-                border-radius: 10px;
+                background-color: #FFF2F2;
+                border: 1px solid #FECACA;
+                border-radius: 12px;
             }
         """)
         layout.addWidget(error_label)
