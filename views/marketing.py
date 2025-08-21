@@ -305,3 +305,4 @@ def display() -> QWidget:
         fail_label.setStyleSheet("color:red; font-size:14pt;")
         fail_layout.addWidget(fail_label)
         return fail_widget
+
