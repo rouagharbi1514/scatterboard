@@ -4,89 +4,161 @@
 Room Cost Analysis View
 =======================
 Provides in-depth analysis of costs per occupied room (CPOR).
+(Design modernisé : thème clair, cartes, ombres, toolbar compacte)
 """
 
 from __future__ import annotations
 import pandas as pd
 import numpy as np
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget,
-    QDateEdit, QPushButton, QFrame
+    QDateEdit, QPushButton, QFrame, QGraphicsDropShadowEffect
 )
 from PySide6.QtCore import QDate, Qt
+from PySide6.QtGui import QColor
 import plotly.graph_objects as go
+
 from views.utils import data_required, create_error_widget, create_plotly_widget
 from data.helpers import get_df
+
+
+# ---------- Styles (QSS) ----------
+THEME_QSS_LIGHT = """
+/* Root */
+QWidget#RoomCostView {
+    background: #f7f9fc;
+    color: #0f172a;
+    font-size: 13px;
+}
+
+/* Header */
+QLabel#rcvHeader {
+    color: #0f172a;
+    font-size: 20px;
+    font-weight: 800;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+                                stop:0 #eaf2ff, stop:1 #f4f9ff);
+    border: 1px solid #d7e3ff;
+    letter-spacing: .3px;
+}
+
+/* Toolbar */
+QFrame#toolbar {
+    background: #ffffff;
+    border: 1px solid #e6eefc;
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+QLabel#rangeLabel { color: #334155; font-weight: 600; }
+
+/* DateEdit */
+QDateEdit {
+    min-height: 34px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid #d1ddf8;
+    background: #ffffff;
+    color: #0f172a;
+}
+QDateEdit:hover { border: 1px solid #8ab4ff; }
+
+/* Button */
+QPushButton#applyBtn {
+    background: #2563eb;
+    border: 1px solid #1f51bf;
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-weight: 700;
+}
+QPushButton#applyBtn:hover { background: #1d4ed8; }
+QPushButton#applyBtn:pressed { background: #173db2; }
+
+/* Tabs */
+QTabWidget::pane {
+    border: 1px solid #e6eefc;
+    border-radius: 12px;
+    background: #ffffff;
+}
+QTabBar::tab {
+    background: #f3f7ff;
+    color: #0f172a;
+    padding: 8px 16px;
+    margin: 4px;
+    border: 1px solid #e6eefc;
+    border-bottom: 2px solid transparent;
+    border-radius: 10px;
+    font-weight: 600;
+}
+QTabBar::tab:selected {
+    background: #e7efff;
+    border-bottom: 2px solid #2563eb;
+}
+QTabBar::tab:hover { background: #edf3ff; }
+
+/* Cards */
+QFrame#card {
+    background: #ffffff;
+    border: 1px solid #e6eefc;
+    border-radius: 14px;
+    padding: 12px;
+}
+QFrame#divider { background: #e5e9f2; min-height: 1px; }
+
+/* Collapsible */
+QPushButton#collapsibleBtn {
+    background: #ffffff;
+    color: #1e3a8a;
+    border: 1px solid #cfe0ff;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-weight: 700;
+}
+QPushButton#collapsibleBtn:hover { background: #f6faff; }
+
+QLabel#explain {
+    background: rgba(37, 99, 235, .06);
+    border: 1px solid #cfe0ff;
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: #0f172a;
+}
+"""
 
 
 # --- Helper Functions ---
 
 def _collapsible(text: str) -> QWidget:
-    """Create a collapsible explanation panel.
-
-    Args:
-        text: The explanation text to display
-
-    Returns:
-        A widget containing a toggle button and collapsible text panel
-    """
+    """Bloc d’explication repliable (UI only)."""
     container = QWidget()
-    layout = QVBoxLayout(container)
-    layout.setContentsMargins(0, 5, 0, 5)
+    lay = QVBoxLayout(container)
+    lay.setContentsMargins(0, 6, 0, 0)
+    lay.setSpacing(8)
 
-    # Toggle button
     toggle_btn = QPushButton("Show explanation")
-    toggle_btn.setStyleSheet("""
-        QPushButton {
-            background-color: #4a86e8;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            max-width: 150px;
-        }
-        QPushButton:hover {
-            background-color: #3a76d8;
-        }
-    """)
+    toggle_btn.setObjectName("collapsibleBtn")
 
-    # Explanation label with dark blue background
     explanation = QLabel(text)
+    explanation.setObjectName("explain")
     explanation.setWordWrap(True)
-    explanation.setStyleSheet("""
-        background-color: rgba(25, 45, 90, 0.9);
-        color: white;
-        padding: 15px;
-        border-radius: 5px;
-        font-size: 11pt;
-        line-height: 1.4;
-    """)
     explanation.setVisible(False)
 
-    # Add widgets to layout
-    layout.addWidget(toggle_btn)
-    layout.addWidget(explanation)
+    def toggle():
+        is_vis = explanation.isVisible()
+        explanation.setVisible(not is_vis)
+        toggle_btn.setText("Hide explanation" if not is_vis else "Show explanation")
 
-    # Connect toggle button
-    def toggle_explanation():
-        is_visible = explanation.isVisible()
-        explanation.setVisible(not is_visible)
-        toggle_btn.setText("Hide explanation" if not is_visible else "Show explanation")
-
-    toggle_btn.clicked.connect(toggle_explanation)
-
+    toggle_btn.clicked.connect(toggle)
+    lay.addWidget(toggle_btn)
+    lay.addWidget(explanation)
     return container
 
 
 def _classify_performance(value: float) -> str:
-    """Classify performance based on cost efficiency or profit margin.
-
-    Args:
-        value: The performance value (cost variance, profit margin, etc.)
-
-    Returns:
-        Classification as "excellent", "good", "moderate", or "concerning"
-    """
+    """Classify performance based on cost efficiency or profit margin."""
     if value >= 25:
         return "excellent"
     elif value >= 15:
@@ -96,6 +168,7 @@ def _classify_performance(value: float) -> str:
     else:
         return "concerning"
 
+
 def create_sample_data():
     """Creates sample room cost data if actual data is missing."""
     dates = pd.date_range(start='2024-01-01', end='2024-06-30', freq='D')
@@ -104,7 +177,7 @@ def create_sample_data():
     for date in dates:
         for room_type in room_types:
             cost = np.random.uniform(20, 80)
-            rate = cost * np.random.uniform(2.5, 4.0)  # Rate should be higher than cost
+            rate = cost * np.random.uniform(2.5, 4.0)
             data.append({
                 'date': date,
                 'room_type': room_type,
@@ -114,22 +187,40 @@ def create_sample_data():
     return pd.DataFrame(data)
 
 
+def _card_container() -> QFrame:
+    """Card container with soft shadow."""
+    card = QFrame()
+    card.setObjectName("card")
+    effect = QGraphicsDropShadowEffect()
+    effect.setBlurRadius(18)
+    effect.setXOffset(0)
+    effect.setYOffset(6)
+    effect.setColor(QColor(0, 0, 0, 32))
+    card.setGraphicsEffect(effect)
+    card.setLayout(QVBoxLayout())
+    card.layout().setContentsMargins(12, 12, 12, 12)
+    card.layout().setSpacing(10)
+    return card
+
+
 # --- Main View Class ---
 
 class RoomCostView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("RoomCostView")
+        self.setStyleSheet(THEME_QSS_LIGHT)
+
         self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(16, 16, 16, 16)
+        self.layout.setSpacing(12)
 
         # 1. Load and prepare the base data
         self.base_df = get_df()  # try to load data from your data provider
         if self.base_df is None or self.base_df.empty:
             self.base_df = create_sample_data()
 
-        # Check for available columns and create the required ones if missing
         self.prepare_data()
-
-        # Check if we have the minimum required data
         if self.base_df.empty:
             err = "No data available for room cost analysis"
             self.layout.addWidget(create_error_widget(err))
@@ -141,121 +232,101 @@ class RoomCostView(QWidget):
         # 3. Initial chart rendering
         self.update_charts()
 
+    # -------- data prep --------
     def prepare_data(self):
-        """Prepare the data by normalizing column names and calculating required metrics."""
-        if self.base_df.empty:
+        """Normalize columns & compute required metrics (logic intact)."""
+        if self.base_df is None or self.base_df.empty:
             return
 
-        # Create a working copy
         df = self.base_df.copy()
 
-        # Normalize column names for date
+        # Date
         date_columns = ['Date', 'date', 'reservation_date', 'check_in_date', 'stay_date']
-        date_col = None
-        for col in date_columns:
-            if col in df.columns:
-                date_col = col
-                break
-
+        date_col = next((c for c in date_columns if c in df.columns), None)
         if date_col:
             df['date'] = pd.to_datetime(df[date_col])
         else:
-            # Create dummy dates if no date column
             df['date'] = pd.date_range(start='2024-01-01', periods=len(df), freq='D')
 
-        # Normalize room type column
-        room_type_columns = ['RoomType', 'room_type', 'Room', 'room_category']
-        room_type_col = None
-        for col in room_type_columns:
-            if col in df.columns:
-                room_type_col = col
-                break
+        # Room type
+        room_cols = ['RoomType', 'room_type', 'Room', 'room_category']
+        rcol = next((c for c in room_cols if c in df.columns), None)
+        df['room_type'] = df[rcol].astype(str) if rcol else np.random.choice(
+            ['Standard', 'Deluxe', 'Suite', 'Executive'], size=len(df)
+        )
 
-        if room_type_col:
-            df['room_type'] = df[room_type_col].astype(str)
-        else:
-            # Create dummy room types
-            room_types = ['Standard', 'Deluxe', 'Suite', 'Executive']
-            df['room_type'] = np.random.choice(room_types, size=len(df))
-
-        # Calculate cost per occupied room from available data
+        # CPOR
         if 'CostPerOccupiedRoom' in df.columns:
             df['cost_per_occupied_room'] = df['CostPerOccupiedRoom']
-        elif 'TotalRoomCost' in df.columns and 'OccupiedRooms' in df.columns:
-            # Calculate CPOR from total cost and occupied rooms
+        elif {'TotalRoomCost', 'OccupiedRooms'}.issubset(df.columns):
             df['cost_per_occupied_room'] = df['TotalRoomCost'] / df['OccupiedRooms'].replace(0, np.nan)
         elif 'ADR' in df.columns:
-            # Estimate cost as 30-40% of ADR (industry standard)
             df['cost_per_occupied_room'] = df['ADR'] * np.random.uniform(0.3, 0.4, size=len(df))
         elif 'rate' in df.columns:
-            # Estimate cost as 30-40% of rate
             df['cost_per_occupied_room'] = df['rate'] * np.random.uniform(0.3, 0.4, size=len(df))
         else:
-            # Generate synthetic cost data as fallback
             df['cost_per_occupied_room'] = np.random.uniform(20, 80, size=len(df))
 
-        # Add rate column if not present
+        # rate
         if 'rate' not in df.columns:
-            if 'ADR' in df.columns:
-                df['rate'] = df['ADR']
-            else:
-                # Generate synthetic rates
-                df['rate'] = df['cost_per_occupied_room'] * np.random.uniform(2.5, 4.0, size=len(df))
+            df['rate'] = df['ADR'] if 'ADR' in df.columns else df['cost_per_occupied_room'] * np.random.uniform(2.5, 4.0, size=len(df))
 
-        # Clean up any infinite or NaN values
         df['cost_per_occupied_room'] = df['cost_per_occupied_room'].replace([np.inf, -np.inf], np.nan)
         df = df.dropna(subset=['cost_per_occupied_room'])
-
-        # Ensure room_type is always a string
         df['room_type'] = df['room_type'].astype(str)
 
         self.base_df = df
 
+    # -------- UI --------
     def init_ui(self):
-        """Initializes the user interface."""
+        """Initializes the user interface (design only)."""
         # Header
         header = QLabel("Room Cost Analysis")
-        header.setStyleSheet("font-size: 18pt; font-weight: bold;")
+        header.setObjectName("rcvHeader")
+        header.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.layout.addWidget(header)
 
-        # Filter Row
-        filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Date Range:"))
+        # Toolbar (date range + apply)
+        toolbar = QFrame()
+        toolbar.setObjectName("toolbar")
+        tlay = QHBoxLayout(toolbar)
+        tlay.setContentsMargins(12, 10, 12, 10)
+        tlay.setSpacing(10)
+
+        range_label = QLabel("Date Range:")
+        range_label.setObjectName("rangeLabel")
 
         self.start_date_edit = QDateEdit(calendarPopup=True)
         self.end_date_edit = QDateEdit(calendarPopup=True)
 
-        # Set date pickers to full data range:
         min_date = self.base_df['date'].min()
         max_date = self.base_df['date'].max()
         self.start_date_edit.setDate(QDate(min_date.year, min_date.month, min_date.day))
         self.end_date_edit.setDate(QDate(max_date.year, max_date.month, max_date.day))
 
-        filter_row.addWidget(self.start_date_edit)
-        filter_row.addWidget(QLabel("to"))
-        filter_row.addWidget(self.end_date_edit)
+        apply_btn = QPushButton("Apply")
+        apply_btn.setObjectName("applyBtn")
+        apply_btn.clicked.connect(self.update_charts)
 
-        self.apply_btn = QPushButton("Apply")
-        self.apply_btn.setStyleSheet(
-            "background-color: #4a86e8; color: white; padding: 5px 10px; border-radius: 4px;"
-        )
-        filter_row.addWidget(self.apply_btn)
-        filter_row.addStretch()
-        self.layout.addLayout(filter_row)
+        tlay.addWidget(range_label)
+        tlay.addWidget(self.start_date_edit)
+        tlay.addWidget(QLabel("to"))
+        tlay.addWidget(self.end_date_edit)
+        tlay.addStretch()
+        tlay.addWidget(apply_btn)
+        self.layout.addWidget(toolbar)
 
-        # Separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        self.layout.addWidget(separator)
+        # Divider
+        divider = QFrame()
+        divider.setObjectName("divider")
+        divider.setFixedHeight(1)
+        self.layout.addWidget(divider)
 
-        # Tab Widget for charts
+        # Tabs
         self.tabs = QTabWidget()
         self.layout.addWidget(self.tabs)
 
-        # Connect Apply button to chart update
-        self.apply_btn.clicked.connect(self.update_charts)
-
+    # -------- charts update --------
     def update_charts(self):
         """Filters data by date range and redraws charts."""
         self.tabs.clear()
@@ -266,26 +337,25 @@ class RoomCostView(QWidget):
             df = self.base_df[(self.base_df['date'] >= start_date) & (self.base_df['date'] <= end_date)].copy()
 
             if df.empty:
-                no_data_widget = QWidget()
-                no_data_layout = QVBoxLayout(no_data_widget)
-                no_data_label = QLabel("No data available for the selected date range.")
-                no_data_label.setStyleSheet("font-size: 14pt; color: #666; text-align: center;")
-                no_data_layout.addWidget(no_data_label)
-                self.tabs.addTab(no_data_widget, "No Data")
+                no_data = _card_container()
+                lbl = QLabel("No data available for the selected date range.")
+                lbl.setStyleSheet("font-size: 14px; color: #6b7280;")
+                lbl.setAlignment(Qt.AlignCenter)
+                no_data.layout().addWidget(lbl)
+                self.tabs.addTab(no_data, "No Data")
                 return
 
-            # Ensure data types are correct
+            # Types & sanity
             df['room_type'] = df['room_type'].astype(str)
             df['cost_per_occupied_room'] = pd.to_numeric(df['cost_per_occupied_room'], errors='coerce')
             df = df.dropna(subset=['cost_per_occupied_room'])
-
             if df.empty:
-                error_widget = QWidget()
-                error_layout = QVBoxLayout(error_widget)
-                error_label = QLabel("No valid cost data available for analysis.")
-                error_label.setStyleSheet("font-size: 14pt; color: #ff6b6b; text-align: center;")
-                error_layout.addWidget(error_label)
-                self.tabs.addTab(error_widget, "Error")
+                err = _card_container()
+                lbl = QLabel("No valid cost data available for analysis.")
+                lbl.setStyleSheet("font-size: 14px; color: #ef4444;")
+                lbl.setAlignment(Qt.AlignCenter)
+                err.layout().addWidget(lbl)
+                self.tabs.addTab(err, "Error")
                 return
 
             self._create_cpor_trend_chart(df)
@@ -293,29 +363,25 @@ class RoomCostView(QWidget):
             self._create_cost_vs_rate_chart(df)
 
         except Exception as e:
-            error_widget = QWidget()
-            error_layout = QVBoxLayout(error_widget)
-            error_label = QLabel(f"Error creating charts: {str(e)}")
-            error_label.setStyleSheet("font-size: 12pt; color: #ff6b6b;")
-            error_label.setWordWrap(True)
-            error_layout.addWidget(error_label)
-            self.tabs.addTab(error_widget, "Error")
+            error_card = _card_container()
+            lbl = QLabel(f"Error creating charts: {str(e)}")
+            lbl.setStyleSheet("font-size: 12pt; color: #ff6b6b;")
+            lbl.setWordWrap(True)
+            error_card.layout().addWidget(lbl)
+            self.tabs.addTab(error_card, "Error")
 
-    def _create_cpor_trend_chart(self, df):
-        """Create the CPOR trend chart."""
-    def _create_cpor_trend_chart(self, df):
-        """Create the CPOR trend chart."""
-        cpor_tab = QWidget()
-        cpor_layout = QVBoxLayout(cpor_tab)
-        fig1 = go.Figure()
+    # -------- individual charts --------
+    def _create_cpor_trend_chart(self, df: pd.DataFrame):
+        """CPOR trend chart (by room type, daily avg)."""
+        card = _card_container()
 
-        # Calculate average CPOR for reference line
+        fig = go.Figure()
+
         avg_cpor = df['cost_per_occupied_room'].mean()
         min_cpor = df['cost_per_occupied_room'].min()
         max_cpor = df['cost_per_occupied_room'].max()
-        cpor_variance = ((max_cpor - min_cpor) / avg_cpor) * 100
+        cpor_variance = ((max_cpor - min_cpor) / avg_cpor) * 100 if avg_cpor else 0
 
-        # Find best and worst performing room types
         room_avg_costs = df.groupby('room_type')['cost_per_occupied_room'].mean()
         best_room = room_avg_costs.idxmin()
         worst_room = room_avg_costs.idxmax()
@@ -323,248 +389,189 @@ class RoomCostView(QWidget):
         worst_cost = room_avg_costs.max()
 
         for room_type in df['room_type'].unique():
-            room_type = str(room_type)  # Ensure it's a string
-            room_data = df[df['room_type'] == room_type]
+            room_data = df[df['room_type'] == str(room_type)]
             daily_avg = room_data.groupby('date')['cost_per_occupied_room'].mean().reset_index()
-
-            fig1.add_trace(go.Scatter(
+            fig.add_trace(go.Scatter(
                 x=daily_avg['date'],
                 y=daily_avg['cost_per_occupied_room'],
                 mode='lines+markers',
-                name=room_type,
+                name=str(room_type),
                 line=dict(width=3),
                 marker=dict(size=6)
             ))
 
-        # Add average reference line
-        fig1.add_hline(
+        fig.add_hline(
             y=avg_cpor,
             line_dash="dash",
             line_color="red",
             annotation_text=f"Average CPOR: ${avg_cpor:.2f}"
         )
 
-        fig1.update_layout(
-            title="Cost per Occupied Room (CPOR) Trends",
+        fig.update_layout(
+            title="Cost per Occupied Room (CPOR) – Trends",
             xaxis_title="Date",
             yaxis_title="Cost per Occupied Room ($)",
             template="plotly_white",
             hovermode="x unified",
             height=500
         )
-        cpor_layout.addWidget(create_plotly_widget(fig1))
+        card.layout().addWidget(create_plotly_widget(fig))
 
-        # Create dynamic explanation
-        variance_performance = _classify_performance(cpor_variance)
-        cost_difference = worst_cost - best_cost
-
+        variance_perf = _classify_performance(cpor_variance)
+        cost_diff = worst_cost - best_cost
         explanation = (
             f"Average cost per occupied room across all room types is **${avg_cpor:.2f}**. "
-            f"Cost variance is **{cpor_variance:.1f}%**, indicating **{variance_performance}** cost control consistency. "
-            f"\n\n**{best_room}** rooms have the lowest average cost at **${best_cost:.2f}**, while "
-            f"**{worst_room}** rooms cost **${worst_cost:.2f}** (${cost_difference:.2f} difference). "
-            f"The red dashed line shows the overall average - room types consistently above this line "
-            f"may benefit from cost optimization strategies."
+            f"Cost variance is **{cpor_variance:.1f}%**, indicating **{variance_perf}** cost control consistency.\n\n"
+            f"**{best_room}** rooms have the lowest average cost at **${best_cost:.2f}**, "
+            f"while **{worst_room}** rooms cost **${worst_cost:.2f}** "
+            f"(Δ ${cost_diff:.2f}). The dashed red line shows the overall average."
         )
+        card.layout().addWidget(_collapsible(explanation))
 
-        cpor_layout.addWidget(_collapsible(explanation))
-        self.tabs.addTab(cpor_tab, "CPOR Trend")
+        self.tabs.addTab(card, "CPOR Trend")
 
-    def _create_cost_summary_chart(self, df):
-        """Create the cost summary chart."""
-        summary_tab = QWidget()
-        summary_layout = QVBoxLayout(summary_tab)
+    def _create_cost_summary_chart(self, df: pd.DataFrame):
+        """Cost distribution & variability by room type."""
+        card = _card_container()
 
-        # Calculate summary statistics
-        cost_summary = df.groupby('room_type')['cost_per_occupied_room'].agg([
-            'mean', 'min', 'max', 'std'
-        ]).round(2)
-
-        # Ensure index (room types) are strings
+        cost_summary = df.groupby('room_type')['cost_per_occupied_room'].agg(
+            mean='mean', min='min', max='max', std='std'
+        ).round(2)
         cost_summary.index = cost_summary.index.astype(str)
 
-        # Create a more user-friendly donut chart showing cost distribution
-        fig3 = go.Figure()
-
-        # Calculate total costs for proportional representation
         room_counts = df.groupby('room_type').size()
-        total_costs = cost_summary['mean'] * room_counts
-        
-        # Create donut chart
-        fig3.add_trace(go.Pie(
+        total_costs = (cost_summary['mean'] * room_counts).reindex(cost_summary.index).fillna(0)
+
+        fig = go.Figure()
+        fig.add_trace(go.Pie(
             labels=cost_summary.index,
-            values=total_costs,
-            hole=0.4,
+            values=total_costs.values,
+            hole=0.45,
             textinfo='label+percent',
             textposition='outside',
             marker=dict(
-                colors=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'],
+                colors=['#4F46E5', '#22C55E', '#0EA5E9', '#F59E0B', '#EF4444', '#8B5CF6'],
                 line=dict(color='#FFFFFF', width=2)
             ),
             hovertemplate='<b>%{label}</b><br>' +
-                         'Average Cost: $%{customdata:.2f}<br>' +
-                         'Share of Total Costs: %{percent}<br>' +
-                         '<extra></extra>',
-            customdata=cost_summary['mean']
+                         'Avg Cost: $%{customdata:.2f}<br>' +
+                         'Share: %{percent}<extra></extra>',
+            customdata=cost_summary['mean'].values
         ))
-
-        fig3.update_layout(
+        fig.update_layout(
             title="Cost Distribution by Room Type",
             template="plotly_white",
             height=500,
             showlegend=True,
-            legend=dict(
-                orientation="v",
-                yanchor="middle",
-                y=0.5,
-                xanchor="left",
-                x=1.05
-            ),
-            annotations=[
-                dict(
-                    text=f"Total Avg<br>Cost: ${cost_summary['mean'].mean():.2f}",
-                    x=0.5, y=0.5,
-                    font_size=14,
-                    showarrow=False
-                )
-            ]
+            legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+            annotations=[dict(
+                text=f"Overall Avg<br>${cost_summary['mean'].mean():.2f}",
+                x=0.5, y=0.5, font_size=13, showarrow=False
+            )],
+            margin=dict(r=140)
         )
-        summary_layout.addWidget(create_plotly_widget(fig3))
+        card.layout().addWidget(create_plotly_widget(fig))
 
-        # Create dynamic explanation
         highest_cost_room = cost_summary['mean'].idxmax()
         lowest_cost_room = cost_summary['mean'].idxmin()
         highest_cost = cost_summary['mean'].max()
         lowest_cost = cost_summary['mean'].min()
         cost_spread = highest_cost - lowest_cost
 
-        # Calculate cost variability
-        avg_std = cost_summary['std'].mean()
-        variability_performance = _classify_performance(avg_std)
-
-        # Find room type with highest cost range
-        cost_summary['range'] = cost_summary['max'] - cost_summary['min']
-        most_variable_room = cost_summary['range'].idxmax()
-        highest_range = cost_summary['range'].max()
-
         explanation = (
-            f"This donut chart shows the **cost distribution** across room types based on both average cost and volume. "
-            f"**{highest_cost_room}** rooms have the highest average cost at **${highest_cost:.2f}**, "
-            f"while **{lowest_cost_room}** rooms are most cost-efficient at **${lowest_cost:.2f}** "
-            f"(${cost_spread:.2f} difference). "
-            f"\n\nLarger slices indicate room types that contribute more to total operational costs. "
-            f"The center shows the overall average cost per room (${cost_summary['mean'].mean():.2f}). "
-            f"Focus on optimizing costs for room types with larger slices for maximum impact."
+            f"Donut chart of **cost distribution** (pondérée par volume). "
+            f"**{highest_cost_room}** est le plus coûteux (moyenne **${highest_cost:.2f}**), "
+            f"**{lowest_cost_room}** le plus efficient (**${lowest_cost:.2f}**) "
+            f"(écart **${cost_spread:.2f}**). Les parts les plus larges indiquent "
+            f"les types de chambre qui pèsent le plus dans les coûts globaux."
         )
+        card.layout().addWidget(_collapsible(explanation))
 
-        summary_layout.addWidget(_collapsible(explanation))
-        self.tabs.addTab(summary_tab, "Cost Summary")
+        self.tabs.addTab(card, "Cost Summary")
 
-    def _create_cost_vs_rate_chart(self, df):
-        """Create the cost vs rate chart."""
-        if 'rate' not in df.columns:
-            return
-    def _create_cost_vs_rate_chart(self, df):
-        """Create the cost vs rate chart."""
+    def _create_cost_vs_rate_chart(self, df: pd.DataFrame):
+        """Cost vs rate scatter (colored by profit margin)."""
         if 'rate' not in df.columns:
             return
 
-        scatter_tab = QWidget()
-        scatter_layout = QVBoxLayout(scatter_tab)
-        fig2 = go.Figure()
+        card = _card_container()
+        fig = go.Figure()
 
-        # Calculate overall profit margins for analysis
         df_copy = df.copy()
         df_copy['profit_margin'] = ((df_copy['rate'] - df_copy['cost_per_occupied_room']) / df_copy['rate'] * 100)
         avg_profit_margin = df_copy['profit_margin'].mean()
 
-        # Find room types with best and worst profit margins
         room_margins = df_copy.groupby('room_type')['profit_margin'].mean()
         best_margin_room = room_margins.idxmax()
         worst_margin_room = room_margins.idxmin()
         best_margin = room_margins.max()
         worst_margin = room_margins.min()
 
-        for room_type in df['room_type'].unique():
-            room_type = str(room_type)  # Ensure it's a string
-            room_data = df[df['room_type'] == room_type]
-
-            # Calculate profit margin for color coding
-            if len(room_data) > 0:
-                room_data = room_data.copy()  # Avoid SettingWithCopyWarning
-                room_data['profit_margin'] = ((room_data['rate'] - room_data['cost_per_occupied_room']) / room_data['rate'] * 100)
-
-                fig2.add_trace(go.Scatter(
-                    x=room_data['rate'],
-                    y=room_data['cost_per_occupied_room'],
-                    mode='markers',
-                    name=room_type,
-                    marker=dict(
-                        opacity=0.7,
-                        size=8,
-                        color=room_data['profit_margin'],
-                        colorscale='RdYlGn',
-                        showscale=True if room_type == str(df['room_type'].unique()[0]) else False,
-                        colorbar=dict(
-                            title="Profit Margin (%)",
-                            x=1.02,  # Move colorbar further right
-                            thickness=15,  # Make colorbar thinner
-                            len=0.8  # Make colorbar shorter
-                        )
-                    ),
-                    hovertemplate=
-                    f"<b>{room_type}</b><br>" +
-                    "Rate: $%{x:.2f}<br>" +
-                    "Cost: $%{y:.2f}<br>" +
-                    "Profit Margin: %{marker.color:.1f}%<br>" +
-                    "<extra></extra>"
-                ))
-
-        # Add break-even line (where cost = rate)
-        if not df.empty and 'rate' in df.columns:
-            min_val = min(df['rate'].min(), df['cost_per_occupied_room'].min())
-            max_val = max(df['rate'].max(), df['cost_per_occupied_room'].max())
-            fig2.add_trace(go.Scatter(
-                x=[min_val, max_val],
-                y=[min_val, max_val],
-                mode='lines',
-                name='Break-even Line',
-                line=dict(dash='dash', color='red', width=2),
-                showlegend=True
+        unique_rooms = list(df['room_type'].astype(str).unique())
+        for idx, room_type in enumerate(unique_rooms):
+            room_data = df_copy[df_copy['room_type'] == room_type]
+            fig.add_trace(go.Scatter(
+                x=room_data['rate'],
+                y=room_data['cost_per_occupied_room'],
+                mode='markers',
+                name=room_type,
+                marker=dict(
+                    opacity=0.75,
+                    size=8,
+                    color=room_data['profit_margin'],
+                    colorscale='RdYlGn',
+                    showscale=(idx == 0),
+                    colorbar=dict(
+                        title="Profit Margin (%)",
+                        x=1.05,
+                        thickness=14,
+                        len=0.8
+                    )
+                ),
+                hovertemplate=(
+                    f"<b>{room_type}</b><br>"
+                    "Rate: $%{x:.2f}<br>"
+                    "Cost: $%{y:.2f}<br>"
+                    "Profit Margin: %{marker.color:.1f}%<extra></extra>"
+                )
             ))
 
-        fig2.update_layout(
+        min_val = float(min(df['rate'].min(), df['cost_per_occupied_room'].min()))
+        max_val = float(max(df['rate'].max(), df['cost_per_occupied_room'].max()))
+        fig.add_trace(go.Scatter(
+            x=[min_val, max_val],
+            y=[min_val, max_val],
+            mode='lines',
+            name='Break-even Line',
+            line=dict(dash='dash', color='red', width=2),
+            showlegend=True
+        ))
+
+        fig.update_layout(
             title="Cost per Room vs. Daily Rate (colored by Profit Margin)",
             xaxis_title="Daily Rate ($)",
             yaxis_title="Cost per Occupied Room ($)",
             template="plotly_white",
             height=500,
-            margin=dict(r=120)  # Add right margin for colorbar
+            margin=dict(r=140)
         )
-        scatter_layout.addWidget(create_plotly_widget(fig2))
+        card.layout().addWidget(create_plotly_widget(fig))
 
-        # Create dynamic explanation
-        margin_performance = _classify_performance(avg_profit_margin)
+        margin_perf = _classify_performance(avg_profit_margin)
         margin_spread = best_margin - worst_margin
-
-        # Count points above/below break-even line
-        profitable_count = len(df_copy[df_copy['profit_margin'] > 0])
-        total_count = len(df_copy)
-        profitable_pct = (profitable_count / total_count) * 100
+        profitable_pct = (df_copy['profit_margin'] > 0).mean() * 100
 
         explanation = (
-            f"Average profit margin is **{avg_profit_margin:.1f}%**, indicating **{margin_performance}** "
-            f"pricing efficiency. Points are colored by profit margin - green indicates higher profitability, "
-            f"red indicates lower margins. "
-            f"\n\n**{best_margin_room}** rooms achieve the best margins at **{best_margin:.1f}%**, "
-            f"while **{worst_margin_room}** rooms have **{worst_margin:.1f}%** margins "
-            f"({margin_spread:.1f}% difference). "
-            f"**{profitable_pct:.1f}%** of bookings are above break-even (red dashed line). "
-            f"Points below this line indicate potential pricing or cost control issues."
+            f"Average profit margin: **{avg_profit_margin:.1f}%** (**{margin_perf}**). "
+            f"Couleur = marge : plus vert = plus rentable. "
+            f"**{best_margin_room}** atteint **{best_margin:.1f}%**, "
+            f"**{worst_margin_room}** **{worst_margin:.1f}%** (Δ {margin_spread:.1f} pts). "
+            f"**{profitable_pct:.1f}%** des points sont au-dessus de la ligne de break-even."
         )
+        card.layout().addWidget(_collapsible(explanation))
 
-        scatter_layout.addWidget(_collapsible(explanation))
-        self.tabs.addTab(scatter_tab, "Cost vs. Rate")
+        self.tabs.addTab(card, "Cost vs. Rate")
+
 
 @data_required
 def display():
